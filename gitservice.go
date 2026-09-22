@@ -72,13 +72,13 @@ func (s *GitService) Status(repoPath string) (*RepoStatus, error) {
 		case isConflictCode(x, y):
 			st.Conflicted = append(st.Conflicted, FileStatus{Path: path, OldPath: oldPath, StatusChar: "U", Conflicted: true, Renamed: oldPath != ""})
 		default:
-			if x != '.' {
+			if isStatusChar(x) {
 				st.Staged = append(st.Staged, FileStatus{
 					Path: path, OldPath: oldPath, StatusChar: string(x),
 					Renamed: x == 'R' || x == 'C',
 				})
 			}
-			if y != '.' {
+			if isStatusChar(y) {
 				st.Unstaged = append(st.Unstaged, FileStatus{
 					Path: path, OldPath: oldPath, StatusChar: string(y),
 					Renamed: x == 'R' || x == 'C',
@@ -160,6 +160,17 @@ func isConflictCode(x, y byte) bool {
 	pair := string([]byte{x, y})
 	switch pair {
 	case "DD", "AU", "UD", "UA", "DU", "AA", "UU":
+		return true
+	}
+	return false
+}
+
+// isStatusChar reports whether c is a porcelain status letter.
+// An unmodified side is reported as a space (or '.' in some formats),
+// never as one of these letters.
+func isStatusChar(c byte) bool {
+	switch c {
+	case 'M', 'A', 'D', 'R', 'C', 'T', 'U', 'X':
 		return true
 	}
 	return false
@@ -396,7 +407,8 @@ func parseNumstat(a, d string) (int, int, bool) {
 }
 
 // diffBaseArgs returns the git args producing a patch for a commit.
-// Merge commits are diffed against their first parent (Sourcetree behavior).
+// Merge commits are diffed against their first parent, which shows the
+// changes introduced by the merge itself rather than the whole branch.
 func (s *GitService) diffBaseArgs(repoPath string, hash string) ([]string, error) {
 	parents, err := runGit(repoPath, "show", "-s", "--format=%P", hash)
 	if err != nil {
@@ -538,12 +550,9 @@ func parseTrack(track string, bi *BranchInfo) {
 
 // Stage adds the given paths to the index.
 func (s *GitService) Stage(repoPath string, files []string) error {
-	if len(files) == 0 {
-		return nil
-	}
-	args := append([]string{"-c", "core.quotepath=false", "add", "-A", "--"}, files...)
-	_, err := runGit(repoPath, args...)
-	return err
+	return runPathsFallback(repoPath, files, func(paths []string) []string {
+		return append([]string{"-c", "core.quotepath=false", "add", "-A", "--"}, paths...)
+	})
 }
 
 // StageAll stages every change in the worktree.
@@ -554,18 +563,37 @@ func (s *GitService) StageAll(repoPath string) error {
 
 // Unstage removes the given paths from the index (keeps worktree changes).
 func (s *GitService) Unstage(repoPath string, files []string) error {
+	// Unborn HEAD: `git reset` cannot work, remove from index instead.
+	unborn := headHash(repoPath) == ""
+	return runPathsFallback(repoPath, files, func(paths []string) []string {
+		if unborn {
+			return append([]string{"rm", "-r", "--cached", "-q", "--"}, paths...)
+		}
+		return append([]string{"reset", "-q", "HEAD", "--"}, paths...)
+	})
+}
+
+// runPathsFallback runs the git command built by build for all paths at once.
+// A single batch call is fast but fails as a whole when one pathspec no longer
+// matches (e.g. the file was deleted/renamed externally in the meantime), so on
+// failure each path is retried on its own and the failures are reported.
+func runPathsFallback(repoPath string, files []string, build func(paths []string) []string) error {
 	if len(files) == 0 {
 		return nil
 	}
-	if headHash(repoPath) == "" {
-		// Unborn HEAD: `git reset` cannot work, remove from index instead.
-		args := append([]string{"rm", "-r", "--cached", "-q", "--"}, files...)
-		_, err := runGit(repoPath, args...)
-		return err
+	if _, err := runGit(repoPath, build(files)...); err == nil {
+		return nil
 	}
-	args := append([]string{"reset", "-q", "HEAD", "--"}, files...)
-	_, err := runGit(repoPath, args...)
-	return err
+	var failed []string
+	for _, f := range files {
+		if _, err := runGit(repoPath, build([]string{f})...); err != nil {
+			failed = append(failed, f)
+		}
+	}
+	if len(failed) == 0 {
+		return nil
+	}
+	return fmt.Errorf("以下路径未能处理：%s", strings.Join(failed, "、"))
 }
 
 // UnstageAll resets the whole index to HEAD (keeps worktree changes).
@@ -1140,6 +1168,13 @@ func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*C
 		"GIT_EDITOR=true",
 		"EDITOR=true",
 		"GIT_TERMINAL_PROMPT=0",
+		// 强制彩色输出：终端 UI 会解析 ANSI 颜色码做主题化渲染。
+		// git 2.31+ 支持通过 GIT_CONFIG_* 环境变量注入配置。
+		"GIT_CONFIG_COUNT=2",
+		"GIT_CONFIG_KEY_0=color.ui", "GIT_CONFIG_VALUE_0=always",
+		"GIT_CONFIG_KEY_1=color.diff", "GIT_CONFIG_VALUE_1=always",
+		"CLICOLOR_FORCE=1",
+		"FORCE_COLOR=1",
 	)
 	cmd.WaitDelay = 5 * time.Second
 

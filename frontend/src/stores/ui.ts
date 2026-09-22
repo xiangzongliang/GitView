@@ -33,6 +33,10 @@ export const useUI = defineStore("ui", {
 		opRunning: "",
 		/** built-in terminal panel visibility */
 		terminalOpen: false,
+		/** settings slide-over panel visibility (not a modal dialog) */
+		settingsOpen: false,
+		/** sidebar width in px (drag the divider to change; min/max clamped in App) */
+		sidebarWidth: Number(localStorage.getItem("gv.sidebarW")) || 236,
 	}),
 	actions: {
 		pushToast(type: Toast["type"], title: string, detail?: string) {
@@ -73,6 +77,21 @@ export const useUI = defineStore("ui", {
 		},
 		toggleTerminal() {
 			this.terminalOpen = !this.terminalOpen;
+		},
+		openSettings() {
+			this.settingsOpen = true;
+		},
+		closeSettings() {
+			this.settingsOpen = false;
+		},
+		setSidebarWidth(w: number) {
+			const max = Math.max(200, Math.round(window.innerWidth * 0.4));
+			this.sidebarWidth = Math.round(Math.min(Math.max(200, w), max));
+			try {
+				localStorage.setItem("gv.sidebarW", String(this.sidebarWidth));
+			} catch {
+				/* ignore */
+			}
 		},
 		/** Promise-based confirmation dialog. */
 		confirm(opts: {

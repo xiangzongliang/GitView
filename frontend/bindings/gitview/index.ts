@@ -10,7 +10,7 @@ export {
     RepoService
 };
 
-export {
+export type {
     BranchInfo,
     BranchOptions,
     CloneOptions,

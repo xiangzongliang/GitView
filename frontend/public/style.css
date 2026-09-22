@@ -1,4 +1,4 @@
-/* Git View — global styles & design tokens (dark theme, SourceTree-like) */
+/* Git View — global styles & design tokens (dark + light theme) */
 
 :root {
 	--bg-app: #1b1d23;
@@ -7,6 +7,7 @@
 	--bg-sidebar: #1e2128;
 	--bg-input: #171920;
 	--bg-hover: rgba(255, 255, 255, 0.055);
+	/* selected 状态与焦点圈随主题色走，由 settings store 按当前主题色写入 */
 	--bg-selected: #2f6feb44;
 
 	--border: #31353e;
@@ -45,7 +46,103 @@
 		"Helvetica Neue", "Microsoft YaHei", sans-serif;
 	--font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
 
+	/* 语义化背景/前景（主题相关，亮色主题在下方覆盖） */
+	--menu-bg: #2a2e37;
+	--tooltip-bg: #0c0d11;
+	--term-bg: #14161b;
+	--overlay-bg: rgba(10, 11, 14, 0.45);
+	--hover-soft: rgba(255, 255, 255, 0.06);
+	--row-border: rgba(255, 255, 255, 0.02);
+	--btn-hover-bg: #31353f;
+	--scrollbar-thumb: #454a55;
+	--scrollbar-thumb-hover: #5a6070;
+	--red-wash: rgba(240, 85, 77, 0.1);
+	--welcome-grad-a: #232733;
+	--welcome-grad-b: #1c1f28;
+	--banner-merge-bg: #3a2f18;
+	--banner-rebase-bg: #21304a;
+	--banner-cherry-bg: #33213a;
+	--banner-revert-bg: #3a2325;
+
+	--chip-branch-fg: #46c26a;
+	--chip-branch-bd: #2c5c3c;
+	--chip-branch-bg: #1c3325;
+	--chip-current-fg: #ffffff;
+	--chip-current-bd: #46c26a;
+	--chip-current-bg: #2c6e40;
+	--chip-remote-fg: #bc8cff;
+	--chip-remote-bd: #4d3d6b;
+	--chip-remote-bg: #2c2440;
+	--chip-tag-fg: #e3b341;
+	--chip-tag-bd: #5c5130;
+	--chip-tag-bg: #332c1a;
+
 	color-scheme: dark;
+}
+
+/* 亮色主题：仅覆盖颜色 token，布局 token 保持不变 */
+:root[data-theme='light'] {
+	--bg-app: #f2f3f5;
+	--bg-panel: #ffffff;
+	--bg-panel-2: #f6f7f9;
+	--bg-sidebar: #eceef1;
+	--bg-input: #ffffff;
+	--bg-hover: rgba(0, 0, 0, 0.05);
+
+	/* 亮色分割线：更浅更柔和，避免线条感过重 */
+	--border: #eaecef;
+	--border-strong: #dcdfe4;
+
+	--text: #3a3f47;
+	--text-strong: #171a1f;
+	--text-dim: #6b7078;
+	--text-faint: #9aa0a8;
+
+	--green: #1a7f37;
+	--yellow: #9a6700;
+	--orange: #bc4c00;
+	--red: #cf222e;
+	--purple: #8250df;
+	--teal: #1b7c83;
+
+	--diff-add-bg: #e6ffec;
+	--diff-add-text: #1a7f37;
+	--diff-del-bg: #ffebe9;
+	--diff-del-text: #cf222e;
+	--diff-hunk-bg: #ddf4ff;
+	--diff-hunk-text: #0969da;
+
+	--menu-bg: #ffffff;
+	--tooltip-bg: #ffffff;
+	--term-bg: #fafbfc;
+	--overlay-bg: rgba(15, 18, 24, 0.3);
+	--hover-soft: rgba(0, 0, 0, 0.05);
+	--row-border: rgba(0, 0, 0, 0.045);
+	--btn-hover-bg: #e8eaee;
+	--scrollbar-thumb: #c6cad1;
+	--scrollbar-thumb-hover: #aaafb8;
+	--red-wash: rgba(207, 34, 46, 0.08);
+	--welcome-grad-a: #ffffff;
+	--welcome-grad-b: #eef1f5;
+	--banner-merge-bg: #fff3d6;
+	--banner-rebase-bg: #ddf4ff;
+	--banner-cherry-bg: #f3edff;
+	--banner-revert-bg: #ffebe9;
+
+	--chip-branch-fg: #1a7f37;
+	--chip-branch-bd: #b3ddc0;
+	--chip-branch-bg: #e9f8ee;
+	--chip-current-fg: #ffffff;
+	--chip-current-bd: #1a7f37;
+	--chip-current-bg: #2c6e40;
+	--chip-remote-fg: #8250df;
+	--chip-remote-bd: #d8c9f3;
+	--chip-remote-bg: #f5f0ff;
+	--chip-tag-fg: #9a6700;
+	--chip-tag-bd: #e6d9ad;
+	--chip-tag-bg: #fff5da;
+
+	color-scheme: light;
 }
 
 * {
@@ -84,13 +181,13 @@ body {
 	background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-	background: #454a55;
+	background: var(--scrollbar-thumb);
 	border-radius: 5px;
 	border: 2px solid transparent;
 	background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-	background: #5a6070;
+	background: var(--scrollbar-thumb-hover);
 	background-clip: content-box;
 }
 
@@ -126,7 +223,7 @@ input:focus,
 textarea:focus,
 select:focus {
 	border-color: var(--accent);
-	box-shadow: 0 0 0 2px rgba(76, 141, 255, 0.2);
+	box-shadow: 0 0 0 2px var(--accent-soft);
 }
 input::placeholder,
 textarea::placeholder {
@@ -157,7 +254,7 @@ textarea {
 	white-space: nowrap;
 }
 .btn:hover:not(:disabled) {
-	background: #31353f;
+	background: var(--btn-hover-bg);
 	color: var(--text-strong);
 }
 .btn:active:not(:disabled) {
@@ -220,7 +317,7 @@ textarea {
 	flex: none;
 	display: flex;
 	align-items: flex-end;
-	padding: 0 16px 6px 86px; /* left pad: macOS traffic lights */
+	padding: 0 16px 0 86px; /* left pad: macOS traffic lights */
 	gap: 10px;
 	overflow: hidden;
 }
@@ -262,7 +359,7 @@ textarea {
 	width: var(--sidebar-w);
 	flex: none;
 	background: var(--bg-sidebar);
-	border-right: 1px solid var(--border);
+	/* 右侧分割线由 App.vue 的 .sidebar-resizer 绘制（可拖拽调宽） */
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
@@ -321,24 +418,24 @@ textarea {
 	white-space: nowrap;
 }
 .chip-branch {
-	color: var(--green);
-	border-color: #2c5c3c;
-	background: #1c3325;
+	color: var(--chip-branch-fg);
+	border-color: var(--chip-branch-bd);
+	background: var(--chip-branch-bg);
 }
 .chip-current {
-	color: #fff;
-	border-color: var(--green);
-	background: #2c6e40;
+	color: var(--chip-current-fg);
+	border-color: var(--chip-current-bd);
+	background: var(--chip-current-bg);
 }
 .chip-remote {
-	color: var(--purple);
-	border-color: #4d3d6b;
-	background: #2c2440;
+	color: var(--chip-remote-fg);
+	border-color: var(--chip-remote-bd);
+	background: var(--chip-remote-bg);
 }
 .chip-tag {
-	color: var(--yellow);
-	border-color: #5c5130;
-	background: #332c1a;
+	color: var(--chip-tag-fg);
+	border-color: var(--chip-tag-bd);
+	background: var(--chip-tag-bg);
 }
 .chip-head {
 	color: var(--text-strong);

@@ -9,7 +9,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -19,47 +19,37 @@ import * as $models from "./models.js";
  * Clone clones a remote repository and registers it.
  */
 export function Clone(opts: $models.CloneOptions): $CancellablePromise<$models.RepoEntry | null> {
-    return $Call.ByID(3488793038, opts).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(3488793038, opts);
 }
 
 /**
  * Init creates a new git repository in dir and registers it.
  */
 export function Init(dir: string): $CancellablePromise<$models.RepoEntry | null> {
-    return $Call.ByID(1958060199, dir).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(1958060199, dir);
 }
 
 /**
  * ListRepos returns all registered repositories in stored order.
  * The order is user-managed (drag & drop) and persisted via SaveLayout.
  */
-export function ListRepos(): $CancellablePromise<$models.RepoEntry[]> {
-    return $Call.ByID(4136257610).then(($result: any) => {
-        return $$createType2($result);
-    });
+export function ListRepos(): $CancellablePromise<$models.RepoEntry[] | null> {
+    return $Call.ByID(4136257610);
 }
 
 /**
  * OpenRepo validates a path, resolves it to the repository root and registers it.
  */
 export function OpenRepo(path: string): $CancellablePromise<$models.RepoEntry | null> {
-    return $Call.ByID(2613186397, path).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(2613186397, path);
 }
 
 /**
  * RemoteBranches lists the heads of a remote repository without cloning it.
  * It is used by the clone dialog to offer a branch picker.
  */
-export function RemoteBranches(url: string, username: string, password: string): $CancellablePromise<string[]> {
-    return $Call.ByID(3477622215, url, username, password).then(($result: any) => {
-        return $$createType3($result);
-    });
+export function RemoteBranches(url: string, username: string, password: string): $CancellablePromise<string[] | null> {
+    return $Call.ByID(3477622215, url, username, password);
 }
 
 /**
@@ -80,12 +70,6 @@ export function RevealInFinder(path: string): $CancellablePromise<void> {
  * SaveLayout persists the repository order and group assignments exactly as
  * provided by the frontend (drag & drop result).
  */
-export function SaveLayout(entries: $models.RepoEntry[]): $CancellablePromise<void> {
+export function SaveLayout(entries: $models.RepoEntry[] | null): $CancellablePromise<void> {
     return $Call.ByID(2693767170, entries);
 }
-
-// Private type creation functions
-const $$createType0 = $models.RepoEntry.createFrom;
-const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = $Create.Array($$createType0);
-const $$createType3 = $Create.Array($Create.Any);

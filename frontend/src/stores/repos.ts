@@ -3,15 +3,52 @@ import { RepoService, pickDirectory, errMsg } from "../api";
 import type { RepoEntry, CloneOptions } from "../api";
 import { useUI } from "./ui";
 
+export interface RepoGroup {
+	/** "" = 未分组 */
+	name: string;
+	entries: RepoEntry[];
+}
+
 export const useRepos = defineStore("repos", {
 	state: () => ({
 		entries: [] as RepoEntry[],
 		activePath: "",
 		loaded: false,
+		/** 已折叠的分组名 */
+		collapsedGroups: {} as Record<string, boolean>,
+		/** 暂无仓库的分组（新建后等待拖入仓库，不参与持久化） */
+		emptyGroups: [] as string[],
 	}),
 	getters: {
 		active(s): RepoEntry | null {
 			return s.entries.find((e) => e.path === s.activePath) || null;
+		},
+		/** 分组视图：按首次出现顺序排序，未分组固定在最后 */
+		groups(s): RepoGroup[] {
+			const order: string[] = [...s.emptyGroups];
+			const map = new Map<string, RepoEntry[]>();
+			for (const e of s.entries) {
+				const g = e.group || "";
+				if (!map.has(g)) {
+					map.set(g, []);
+					if (g && !order.includes(g)) order.push(g);
+				}
+				map.get(g)!.push(e);
+			}
+			const out: RepoGroup[] = [];
+			for (const g of order) {
+				const list = map.get(g);
+				if (g && list && list.length)
+					out.push({ name: g, entries: list });
+			}
+			for (const [g, list] of map) {
+				if (g && !order.includes(g) && list.length)
+					out.push({ name: g, entries: list });
+			}
+			const ungrouped = map.get("");
+			if (ungrouped && ungrouped.length)
+				out.push({ name: "", entries: ungrouped });
+			return out;
 		},
 	},
 	actions: {
@@ -26,6 +63,74 @@ export const useRepos = defineStore("repos", {
 		},
 		setActive(path: string) {
 			if (path) this.activePath = path;
+		},
+		toggleGroup(name: string) {
+			this.collapsedGroups[name] = !this.collapsedGroups[name];
+		},
+		/** 把当前完整顺序（含 group 字段）发送给后端持久化；失败仅提示，不回滚本地状态 */
+		async saveLayout() {
+			const ui = useUI();
+			try {
+				await RepoService.SaveLayout(
+					this.entries.map((e) => ({ ...e, group: e.group || "" })),
+				);
+			} catch (e) {
+				ui.error("保存布局失败", errMsg(e));
+			}
+		},
+		/** 应用拖拽/分组变更后的完整列表并持久化 */
+		async applyLayout(entries: RepoEntry[]) {
+			this.entries = entries;
+			// 分组一旦有了仓库，就不再是空分组
+			this.emptyGroups = this.emptyGroups.filter(
+				(n) => !entries.some((e) => (e.group || "") === n),
+			);
+			await this.saveLayout();
+		},
+		createGroup(name: string): boolean {
+			const n = name.trim();
+			if (!n) return false;
+			if (
+				this.emptyGroups.includes(n) ||
+				this.entries.some((e) => (e.group || "") === n)
+			) {
+				useUI().error("新建分组失败", `分组 “${n}” 已存在`);
+				return false;
+			}
+			this.emptyGroups.push(n);
+			return true;
+		},
+		async renameGroup(from: string, to: string): Promise<boolean> {
+			const n = to.trim();
+			if (!n || n === from) return false;
+			if (
+				this.emptyGroups.includes(n) ||
+				this.entries.some((e) => (e.group || "") === n)
+			) {
+				useUI().error("重命名分组失败", `分组 “${n}” 已存在`);
+				return false;
+			}
+			this.entries.forEach((e) => {
+				if ((e.group || "") === from) e.group = n;
+			});
+			const i = this.emptyGroups.indexOf(from);
+			if (i !== -1) this.emptyGroups.splice(i, 1, n);
+			if (this.collapsedGroups[from]) {
+				this.collapsedGroups[n] = true;
+				delete this.collapsedGroups[from];
+			}
+			await this.saveLayout();
+			return true;
+		},
+		/** 解散分组：组内仓库变回未分组，分组本身消失 */
+		async dissolveGroup(name: string) {
+			this.entries.forEach((e) => {
+				if ((e.group || "") === name) e.group = "";
+			});
+			const i = this.emptyGroups.indexOf(name);
+			if (i !== -1) this.emptyGroups.splice(i, 1);
+			delete this.collapsedGroups[name];
+			await this.saveLayout();
 		},
 		async openPath(path: string): Promise<RepoEntry | null> {
 			const ui = useUI();

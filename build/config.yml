@@ -10,7 +10,7 @@ info:
     productIdentifier: "com.gitview.desktop" # The unique product identifier
     description: "Git View - a visual Git client" # The application description
     copyright: "(c) 2026, My Company" # Copyright text
-    comments: "SourceTree-like Git GUI" # Comments
+    comments: "Modern Git desktop client" # Comments
     version: "0.0.1" # The application version
     # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
     #                               # Should match the name of your .icon file without the extension
