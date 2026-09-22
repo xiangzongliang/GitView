@@ -3,8 +3,10 @@ import { computed, ref } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
 import { shortHash } from '../../utils/format'
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
+import SelectMenu from '../ui/SelectMenu.vue'
+import type { SelectEntry } from '../ui/types'
 
 const props = defineProps<{ payload?: { target?: string } }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -17,6 +19,9 @@ const message = ref('')
 const push = ref(false)
 
 const remotes = computed(() => repo.refs?.remotes || [])
+const remoteOptions = computed<SelectEntry[]>(() =>
+  remotes.value.map((r) => ({ label: r.name, value: r.name, icon: 'cloud' }))
+)
 const remote = ref(
   remotes.value.some((r) => r.name === 'origin') ? 'origin' : remotes.value[0]?.name || ''
 )
@@ -64,9 +69,13 @@ async function submit() {
     <label class="check">
       <input v-model="push" type="checkbox" :disabled="!remotes.length" />
       创建后推送到远程
-      <select v-if="push && remotes.length" v-model="remote" class="remote-select" @click.stop>
-        <option v-for="r in remotes" :key="r.name" :value="r.name">{{ r.name }}</option>
-      </select>
+      <SelectMenu
+        v-if="push && remotes.length"
+        v-model="remote"
+        :options="remoteOptions"
+        :max-height="240"
+        @click.stop
+      />
     </label>
     <template #footer>
       <button class="btn" @click="emit('close')">取消</button>
@@ -113,10 +122,5 @@ input[type='text'] {
 .check input[type='checkbox'] {
   accent-color: var(--accent);
   cursor: pointer;
-}
-.remote-select {
-  height: 24px;
-  padding: 0 6px;
-  font-size: 12px;
 }
 </style>

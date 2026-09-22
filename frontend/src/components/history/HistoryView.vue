@@ -4,7 +4,7 @@ import { useRepo } from '../../stores/repo'
 import { ROW_H, layoutGraph } from '../../utils/graph'
 import CommitRow from './CommitRow.vue'
 import CommitDetail from './CommitDetail.vue'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const repo = useRepo()
 
@@ -13,7 +13,9 @@ const scroller = ref<HTMLElement | null>(null)
 const scrollTop = ref(0)
 const viewH = ref(600)
 
-const layout = computed(() => layoutGraph(repo.commits))
+const layout = computed(() =>
+  layoutGraph(repo.commits, { sparse: !!repo.logSearch })
+)
 const rows = computed(() => layout.value.rows)
 const laneCount = computed(() => layout.value.laneCount)
 const total = computed(() => rows.value.length * ROW_H)

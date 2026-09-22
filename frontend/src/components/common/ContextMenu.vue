@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useUI } from '../../stores/ui'
-import Icon from './Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const ui = useUI()
 const el = ref<HTMLElement | null>(null)

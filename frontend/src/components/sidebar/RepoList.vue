@@ -2,7 +2,7 @@
 import { useRepos } from '../../stores/repos'
 import { useUI } from '../../stores/ui'
 import { pickDirectory } from '../../api'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const repos = useRepos()
 const ui = useUI()
@@ -37,7 +37,7 @@ function repoMenu(e: MouseEvent, path: string) {
       action: async () => {
         const ok = await ui.confirm({
           title: '移除仓库',
-          message: '仅从 GitView 列表中移除，不会删除磁盘上的任何文件。\n\n' + (entry?.name || path),
+          message: '仅从 Git View 列表中移除，不会删除磁盘上的任何文件。\n\n' + (entry?.name || path),
           confirmLabel: '移除',
         })
         if (ok) await repos.remove(path)

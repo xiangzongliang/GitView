@@ -6,6 +6,7 @@ import { useUI } from './stores/ui'
 import TitleBar from './components/layout/TitleBar.vue'
 import Toolbar from './components/layout/Toolbar.vue'
 import StatusBar from './components/layout/StatusBar.vue'
+import TerminalPanel from './components/layout/TerminalPanel.vue'
 import Sidebar from './components/sidebar/Sidebar.vue'
 import HistoryView from './components/history/HistoryView.vue'
 import StatusView from './components/status/StatusView.vue'
@@ -41,6 +42,16 @@ onBeforeUnmount(() => {
   if (pollTimer) window.clearInterval(pollTimer)
 })
 
+// 全局快捷键：⌃` 开关内置终端
+function onGlobalKey(e: KeyboardEvent) {
+  if (e.ctrlKey && e.key === '`') {
+    e.preventDefault()
+    ui.toggleTerminal()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onGlobalKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
+
 function switchRepo(path: string) {
   if (path === repo.path) return
   repo.attach(path)
@@ -72,6 +83,7 @@ watch(
         </template>
       </div>
     </div>
+    <TerminalPanel v-if="repos.activePath" />
     <StatusBar />
     <Toasts />
     <ContextMenu />

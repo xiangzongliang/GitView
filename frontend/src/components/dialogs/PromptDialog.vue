@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import ModalDialog from '../common/ModalDialog.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
 
 const props = defineProps<{
   payload: {

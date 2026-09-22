@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { copyText } from '../../api'
 import { fmtDateTime, relTime, statusColor, basename, dirname } from '../../utils/format'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
 import RefChips from '../common/RefChips.vue'
 import DiffViewer from '../common/DiffViewer.vue'
 
@@ -47,14 +47,14 @@ function statusTitle(ch: string): string {
           </div>
           <div class="meta-item">
             <span class="k">提交</span>
-            <span class="v mono hash" :title="c.hash" @click="copyText(c.hash)">
-              {{ c.hash }}
+            <span class="v hash" :title="c.hash" @click="copyText(c.hash)">
+              <span class="hash-text mono">{{ c.hash }}</span>
               <Icon name="copy" :size="11" class="copy-ic" />
             </span>
           </div>
           <div v-if="c.parents && c.parents.length" class="meta-item">
             <span class="k">父提交</span>
-            <span class="v">
+            <span class="v parents">
               <button
                 v-for="p in c.parents"
                 :key="p"
@@ -152,6 +152,7 @@ function statusTitle(ch: string): string {
 }
 .meta-item {
   display: flex;
+  align-items: center;
   gap: 8px;
   font-size: 11.5px;
   min-width: 0;
@@ -160,29 +161,47 @@ function statusTitle(ch: string): string {
   flex: none;
   width: 40px;
   color: var(--text-faint);
+  line-height: 20px;
 }
 .v {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 20px;
   color: var(--text);
   user-select: text;
   cursor: text;
 }
 .hash {
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .hash:hover {
   color: var(--accent);
 }
+.hash-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .copy-ic {
+  flex: none;
   opacity: 0.6;
+}
+.parents {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .parent {
   font-size: 11.5px;
   color: var(--accent);
-  margin-right: 8px;
   padding: 0;
+  line-height: 20px;
 }
 .parent:hover {
   text-decoration: underline;

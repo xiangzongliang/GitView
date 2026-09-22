@@ -213,6 +213,16 @@ export function RevertAbort(repoPath: string): $CancellablePromise<void> {
 }
 
 /**
+ * RunCommand executes an arbitrary shell command for the built-in terminal.
+ * cwd is the directory the command starts in ("" = repoPath). The final
+ * working directory is reported back so the UI can keep `cd` state.
+ * Output is capped; only real startup failures return an error.
+ */
+export function RunCommand(repoPath: string, cwd: string, command: string): $CancellablePromise<$models.CommandResult | null> {
+    return $Call.ByID(614596395, repoPath, cwd, command);
+}
+
+/**
  * ShowCommit returns the full details of a single commit.
  */
 export function ShowCommit(repoPath: string, hash: string): $CancellablePromise<$models.Commit | null> {

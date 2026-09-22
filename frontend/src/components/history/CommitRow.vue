@@ -5,7 +5,7 @@ import type { MenuItem } from '../../stores/ui'
 import { copyText } from '../../api'
 import { laneColor, relTime, shortHash } from '../../utils/format'
 import { ROW_H, laneX, graphWidth } from '../../utils/graph'
-import type { GraphRow } from '../../utils/graph'
+import type { GraphCurve, GraphRow } from '../../utils/graph'
 import RefChips from '../common/RefChips.vue'
 
 const props = defineProps<{
@@ -21,10 +21,14 @@ const w = graphWidth(props.laneCount)
 const mid = ROW_H / 2
 const dotX = laneX(props.row.lane)
 
-function curvePath(from: number, to: number): string {
-  const x1 = laneX(from)
-  const x2 = laneX(to)
+function curvePath(c: GraphCurve): string {
+  const x1 = laneX(c.from)
+  const x2 = laneX(c.to)
   const k = mid / 2
+  if (c.kind === 'in') {
+    // another lane converging from the top edge into this row's dot
+    return `M ${x1} 0 C ${x1} ${k}, ${x2} ${mid - k}, ${x2} ${mid}`
+  }
   return `M ${x1} ${mid} C ${x1} ${mid + k}, ${x2} ${ROW_H - k}, ${x2} ${ROW_H}`
 }
 
@@ -108,11 +112,11 @@ async function dblClick() {
         :stroke="laneColor(row.lane)"
         stroke-width="1.6"
       />
-      <!-- merges / lane collapses -->
+      <!-- merges / lane collapses / converging lanes -->
       <path
         v-for="(c, i) in row.curves"
         :key="'c' + i"
-        :d="curvePath(c.from, c.to)"
+        :d="curvePath(c)"
         fill="none"
         :stroke="laneColor(c.from)"
         stroke-width="1.6"
@@ -120,10 +124,11 @@ async function dblClick() {
       <circle :cx="dotX" :cy="mid" r="4" :fill="laneColor(row.lane)" stroke="#16181d" stroke-width="1.2" />
     </svg>
 
-    <div class="content">
-      <RefChips :refs="row.commit.refs" class="chips" />
-      <span class="subject" :title="row.commit.subject">{{ row.commit.subject }}</span>
+    <!-- refs get a dedicated column so branch chips never overlap the subject -->
+    <div class="refs-col">
+      <RefChips :refs="row.commit.refs" :max="2" />
     </div>
+    <span class="subject" :title="row.commit.subject">{{ row.commit.subject }}</span>
 
     <span class="author" :title="row.commit.author + ' <' + row.commit.authorEmail + '>'">
       {{ row.commit.author }}
@@ -159,21 +164,16 @@ async function dblClick() {
   flex: none;
   display: block;
 }
-.content {
-  flex: 1;
-  min-width: 0;
+.refs-col {
+  flex: none;
+  width: 200px;
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-.chips {
-  flex: none;
-  display: inline-flex;
   gap: 4px;
-  max-width: 45%;
   overflow: hidden;
 }
 .subject {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

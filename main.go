@@ -12,8 +12,8 @@ var assets embed.FS
 
 func main() {
 	app := application.New(application.Options{
-		Name:        "GitView",
-		Description: "A SourceTree-like Git GUI built with Wails v3",
+		Name:        "Git View",
+		Description: "Git View - a SourceTree-like Git GUI built with Wails v3",
 		Services: []application.Service{
 			application.NewService(&GitService{}),
 			application.NewService(&RepoService{}),
@@ -27,7 +27,7 @@ func main() {
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:  "GitView",
+		Title:  "Git View",
 		Width:  1400,
 		Height: 900,
 		Mac: application.MacWindow{

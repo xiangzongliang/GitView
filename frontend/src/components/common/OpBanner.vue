@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRepo } from '../../stores/repo'
-import Icon from './Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const repo = useRepo()
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
 
 const props = defineProps<{
   payload: {

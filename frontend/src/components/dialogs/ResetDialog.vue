@@ -3,8 +3,8 @@ import { computed, ref } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
 import { shortHash } from '../../utils/format'
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
 
 const props = defineProps<{ payload?: { target?: string } }>()
 const emit = defineEmits<{ (e: 'close'): void }>()

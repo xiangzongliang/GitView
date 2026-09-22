@@ -6,7 +6,7 @@ import type { MenuItem } from '../../stores/ui'
 import type { BranchInfo, TagInfo, StashEntry } from '../../api'
 import { copyText } from '../../api'
 import { relTime } from '../../utils/format'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const repo = useRepo()
 const ui = useUI()
@@ -210,16 +210,16 @@ function tagMenu(e: MouseEvent, t: TagInfo) {
 // ---------------------------------------------------------------------- stashes
 function stashMenu(e: MouseEvent, s: StashEntry) {
   menu(e, [
-    { label: '应用（保留贮藏）', icon: 'stash', action: () => repo.stashApply(s.index) },
+    { label: '应用（保留 Stash）', icon: 'stash', action: () => repo.stashApply(s.index) },
     { label: '弹出（应用并删除）', icon: 'pull', action: () => repo.stashPop(s.index) },
     { separator: true },
     {
-      label: '删除贮藏…',
+      label: '删除 Stash…',
       icon: 'trash',
       danger: true,
       action: async () => {
         const ok = await ui.confirm({
-          title: '删除贮藏',
+          title: '删除 Stash',
           message: '确定删除 ' + s.ref + '（' + (s.message || '无描述') + '）吗？此操作不可恢复。',
           confirmLabel: '删除',
           danger: true,
@@ -342,10 +342,10 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
         <button class="sec-toggle" @click="toggle('stashes')">
           <Icon :name="collapsed.stashes ? 'chevron-right' : 'chevron-down'" :size="12" />
           <Icon name="stash" :size="12" />
-          <span class="sec-title">贮藏</span>
+          <span class="sec-title">Stash</span>
           <span class="sec-count">{{ stashes.length }}</span>
         </button>
-        <button class="btn-icon sec-add" title="贮藏当前更改…" @click="ui.openDialog('stash')">
+        <button class="btn-icon sec-add" title="Stash 当前更改…" @click="ui.openDialog('stash')">
           <Icon name="plus" :size="12" />
         </button>
       </div>
@@ -361,7 +361,7 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
           <span class="nav-name">{{ s.message || s.ref }}</span>
           <span class="mini faint">{{ relTime(s.timestamp) }}</span>
         </div>
-        <div v-if="stashes.length === 0" class="nav-empty">没有贮藏</div>
+        <div v-if="stashes.length === 0" class="nav-empty">没有 Stash</div>
       </template>
     </div>
   </div>

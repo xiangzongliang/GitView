@@ -27,16 +27,35 @@ const branchChips = computed<RefDecoration[] | null>(() => {
 <template>
   <!-- 顶部 50px 为 macOS 原生拖拽区（InvisibleTitleBarHeight），此处仅做展示，不放可交互控件 -->
   <div class="titlebar">
-    <span class="title-name">{{ name || 'GitView' }}</span>
-    <span v-if="path" class="title-path">{{ path }}</span>
-    <span class="title-chips">
-      <RefChips :refs="branchChips" />
-    </span>
+    <!-- 绝对定位居中：不受左侧红绿灯 padding 影响，相对整个窗口居中 -->
+    <div class="title-center">
+      <span class="title-name">{{ name || 'Git View' }}</span>
+      <span v-if="path" class="title-path" :title="path">{{ path }}</span>
+      <span class="title-chips">
+        <RefChips :refs="branchChips" />
+      </span>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.titlebar {
+  position: relative;
+}
+.title-center {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 64%;
+  min-width: 0;
+  white-space: nowrap;
+}
 .title-name {
+  flex: none;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text-strong);
@@ -49,7 +68,6 @@ const branchChips = computed<RefDecoration[] | null>(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
-  flex: 1;
 }
 .title-chips {
   display: inline-flex;

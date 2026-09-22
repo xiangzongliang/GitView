@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { useRepos } from '../../stores/repos'
 import { useUI } from '../../stores/ui'
 import { pickDirectory } from '../../api'
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
 
 const repos = useRepos()
 const ui = useUI()

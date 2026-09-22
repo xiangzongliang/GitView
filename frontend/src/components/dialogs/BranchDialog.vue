@@ -3,8 +3,10 @@ import { computed, ref } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
 import { shortHash } from '../../utils/format'
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
+import SelectMenu from '../ui/SelectMenu.vue'
+import type { SelectEntry } from '../ui/types'
 
 const props = defineProps<{ payload?: { start?: string; name?: string } }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -30,6 +32,32 @@ const remoteBranches = computed(() =>
 )
 const tags = computed(() => repo.refs?.tags || [])
 
+const startOptions = computed<SelectEntry[]>(() => {
+  const opts: SelectEntry[] = [{ label: headLabel.value, value: '' }]
+  if (isCommitStart.value) {
+    opts.push({ label: '提交 ' + shortHash(start.value), value: start.value, icon: 'commit' })
+  }
+  const locals = localBranches.value.map((b) => ({
+    label: b.name + (b.isCurrent ? '（当前）' : ''),
+    value: b.name,
+    icon: 'branch',
+  }))
+  const remotes = remoteBranches.value.map((b) => ({
+    label: b.name,
+    value: b.name,
+    icon: 'cloud',
+  }))
+  const tagOpts = tags.value.map((t) => ({
+    label: t.name,
+    value: 'refs/tags/' + t.name,
+    icon: 'tag',
+  }))
+  if (locals.length) opts.push({ group: '本地分支', options: locals })
+  if (remotes.length) opts.push({ group: '远程分支', options: remotes })
+  if (tagOpts.length) opts.push({ group: '标签', options: tagOpts })
+  return opts
+})
+
 const valid = computed(() => !!name.value.trim())
 
 async function submit() {
@@ -53,21 +81,7 @@ async function submit() {
     </label>
     <label class="field">
       <span class="label">起点（留空 = HEAD）</span>
-      <select v-model="start">
-        <option value="">{{ headLabel }}</option>
-        <option v-if="isCommitStart" :value="start">提交 {{ shortHash(start) }}</option>
-        <optgroup v-if="localBranches.length" label="本地分支">
-          <option v-for="b in localBranches" :key="b.name" :value="b.name">
-            {{ b.name }}{{ b.isCurrent ? '（当前）' : '' }}
-          </option>
-        </optgroup>
-        <optgroup v-if="remoteBranches.length" label="远程分支">
-          <option v-for="b in remoteBranches" :key="b.name" :value="b.name">{{ b.name }}</option>
-        </optgroup>
-        <optgroup v-if="tags.length" label="标签">
-          <option v-for="t in tags" :key="t.name" :value="'refs/tags/' + t.name">{{ t.name }}</option>
-        </optgroup>
-      </select>
+      <SelectMenu v-model="start" :options="startOptions" full-width :max-height="300" />
     </label>
     <label class="check">
       <input v-model="checkout" type="checkbox" />
@@ -92,8 +106,7 @@ async function submit() {
   font-size: 11.5px;
   color: var(--text-dim);
 }
-input[type='text'],
-select {
+input[type='text'] {
   width: 100%;
 }
 .check {

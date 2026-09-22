@@ -2,8 +2,10 @@
 import { computed, ref } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
+import SelectMenu from '../ui/SelectMenu.vue'
+import type { SelectEntry } from '../ui/types'
 
 const props = defineProps<{ payload?: { ref?: string } }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -23,6 +25,29 @@ const localBranches = computed(() =>
 const remoteBranches = computed(() => (repo.refs?.branches || []).filter((b) => b.isRemote))
 const tags = computed(() => repo.refs?.tags || [])
 
+const targetOptions = computed<SelectEntry[]>(() => {
+  const opts: SelectEntry[] = []
+  const locals = localBranches.value.map((b) => ({
+    label: b.name,
+    value: b.name,
+    icon: 'branch',
+  }))
+  const remotes = remoteBranches.value.map((b) => ({
+    label: b.name,
+    value: b.name,
+    icon: 'cloud',
+  }))
+  const tagOpts = tags.value.map((t) => ({
+    label: t.name,
+    value: 'refs/tags/' + t.name,
+    icon: 'tag',
+  }))
+  if (locals.length) opts.push({ group: '本地分支', options: locals })
+  if (remotes.length) opts.push({ group: '远程分支', options: remotes })
+  if (tagOpts.length) opts.push({ group: '标签', options: tagOpts })
+  return opts
+})
+
 const valid = computed(() => !!target.value)
 
 async function submit() {
@@ -39,18 +64,13 @@ async function submit() {
     </p>
     <label class="field">
       <span class="label">要合并的引用 *</span>
-      <select v-model="target">
-        <option value="" disabled>选择分支或标签…</option>
-        <optgroup v-if="localBranches.length" label="本地分支">
-          <option v-for="b in localBranches" :key="b.name" :value="b.name">{{ b.name }}</option>
-        </optgroup>
-        <optgroup v-if="remoteBranches.length" label="远程分支">
-          <option v-for="b in remoteBranches" :key="b.name" :value="b.name">{{ b.name }}</option>
-        </optgroup>
-        <optgroup v-if="tags.length" label="标签">
-          <option v-for="t in tags" :key="t.name" :value="'refs/tags/' + t.name">{{ t.name }}</option>
-        </optgroup>
-      </select>
+      <SelectMenu
+        v-model="target"
+        :options="targetOptions"
+        placeholder="选择分支或标签…"
+        full-width
+        :max-height="300"
+      />
     </label>
     <label class="check">
       <input v-model="noFF" type="checkbox" :disabled="squash" />
@@ -85,9 +105,6 @@ async function submit() {
 .label {
   font-size: 11.5px;
   color: var(--text-dim);
-}
-select {
-  width: 100%;
 }
 .check {
   display: flex;

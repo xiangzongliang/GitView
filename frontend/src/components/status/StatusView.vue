@@ -4,7 +4,7 @@ import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
 import FileList from './FileList.vue'
 import DiffViewer from '../common/DiffViewer.vue'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const repo = useRepo()
 const ui = useUI()

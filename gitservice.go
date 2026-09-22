@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // GitService exposes all git operations to the frontend.
@@ -1090,4 +1094,91 @@ func (s *GitService) DeleteTag(repoPath string, name string, remote string) erro
 		}
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Built-in terminal
+// ---------------------------------------------------------------------------
+
+// cmdPwdMarker delimits the working-directory report appended to every
+// terminal command so `cd` can persist across invocations.
+const cmdPwdMarker = "__GV_PWD__"
+
+// RunCommand executes an arbitrary shell command for the built-in terminal.
+// cwd is the directory the command starts in ("" = repoPath). The final
+// working directory is reported back so the UI can keep `cd` state.
+// Output is capped; only real startup failures return an error.
+func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*CommandResult, error) {
+	res := &CommandResult{}
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return res, nil
+	}
+	dir := cwd
+	if dir == "" {
+		dir = repoPath
+	}
+	if dir == "" {
+		return nil, errors.New("没有可用的工作目录")
+	}
+	if !pathExists(dir) {
+		return nil, fmt.Errorf("目录不存在: %s", dir)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Append a marker line reporting the shell's final PWD (captured &
+	// stripped below) so subsequent commands can continue from there.
+	script := command + "\n__gv_ec=$?; printf '\\n" + cmdPwdMarker + "%s\\n' \"$PWD\"; exit $__gv_ec"
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", script)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"LC_ALL=en_US.UTF-8",
+		"GIT_PAGER=cat",
+		"PAGER=cat",
+		"GIT_EDITOR=true",
+		"EDITOR=true",
+		"GIT_TERMINAL_PROMPT=0",
+	)
+	cmd.WaitDelay = 5 * time.Second
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	runErr := cmd.Run()
+
+	out := buf.String()
+
+	// Extract and strip the PWD marker line.
+	lines := strings.Split(out, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, ln := range lines {
+		if strings.HasPrefix(ln, cmdPwdMarker) {
+			res.NewCwd = strings.TrimPrefix(ln, cmdPwdMarker)
+			continue
+		}
+		kept = append(kept, ln)
+	}
+	out = strings.Join(kept, "\n")
+
+	if ctx.Err() == context.DeadlineExceeded {
+		res.Timeout = true
+		res.ExitCode = -1
+	} else if runErr != nil {
+		var ee *exec.ExitError
+		if errors.As(runErr, &ee) {
+			res.ExitCode = ee.ExitCode()
+		} else {
+			return nil, runErr
+		}
+	}
+
+	// Cap output: keep the tail (most recent), which is what users care about.
+	const maxOut = 256 * 1024
+	if len(out) > maxOut {
+		out = "… 输出过长，已截断开头 …\n" + out[len(out)-maxOut:]
+	}
+	res.Output = out
+	return res, nil
 }

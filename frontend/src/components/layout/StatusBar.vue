@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const repo = useRepo()
 const ui = useUI()
@@ -37,7 +37,7 @@ const st = computed(() => repo.status)
       </span>
       <span v-if="st.ahead > 0" class="sb-item green" title="领先上游的提交数">↑ {{ st.ahead }}</span>
       <span v-if="st.behind > 0" class="sb-item yellow" title="落后上游的提交数">↓ {{ st.behind }}</span>
-      <span v-if="st.stashCount > 0" class="sb-item" title="贮藏数量">
+      <span v-if="st.stashCount > 0" class="sb-item" title="Stash 数量">
         <Icon name="stash" :size="11" />
         {{ st.stashCount }}
       </span>

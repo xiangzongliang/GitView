@@ -2,8 +2,10 @@
 import { computed, ref } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
+import SelectMenu from '../ui/SelectMenu.vue'
+import type { SelectEntry } from '../ui/types'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
@@ -11,6 +13,9 @@ const repo = useRepo()
 const ui = useUI()
 
 const remotes = computed(() => repo.refs?.remotes || [])
+const remoteOptions = computed<SelectEntry[]>(() =>
+  remotes.value.map((r) => ({ label: r.name, value: r.name, icon: 'cloud' }))
+)
 const remote = ref(
   remotes.value.some((r) => r.name === 'origin') ? 'origin' : remotes.value[0]?.name || ''
 )
@@ -43,9 +48,7 @@ async function submit() {
       <div class="row2">
         <label class="field">
           <span class="label">远程 *</span>
-          <select v-model="remote">
-            <option v-for="r in remotes" :key="r.name" :value="r.name">{{ r.name }}</option>
-          </select>
+          <SelectMenu v-model="remote" :options="remoteOptions" full-width :max-height="240" />
         </label>
         <label class="field">
           <span class="label">分支 *</span>
@@ -90,8 +93,7 @@ async function submit() {
   font-size: 11.5px;
   color: var(--text-dim);
 }
-input[type='text'],
-select {
+input[type='text'] {
   width: 100%;
 }
 .check {

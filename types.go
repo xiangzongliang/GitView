@@ -186,3 +186,12 @@ type OpResult struct {
 	Output  string `json:"output"`
 	Success bool   `json:"success"`
 }
+
+// CommandResult carries the outcome of a built-in terminal command.
+type CommandResult struct {
+	Output   string `json:"output"`
+	ExitCode int    `json:"exitCode"`
+	// NewCwd is the working directory after the command ran (so `cd` persists).
+	NewCwd  string `json:"newCwd"`
+	Timeout bool   `json:"timeout"`
+}

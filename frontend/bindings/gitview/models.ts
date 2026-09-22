@@ -69,6 +69,20 @@ export interface CloneOptions {
 }
 
 /**
+ * CommandResult carries the outcome of a built-in terminal command.
+ */
+export interface CommandResult {
+    "output": string;
+    "exitCode": number;
+
+    /**
+     * NewCwd is the working directory after the command ran (so `cd` persists).
+     */
+    "newCwd": string;
+    "timeout": boolean;
+}
+
+/**
  * Commit is one line of git log output.
  */
 export interface Commit {

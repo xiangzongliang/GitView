@@ -1,4 +1,4 @@
-/* GitView — global styles & design tokens (dark theme, SourceTree-like) */
+/* Git View — global styles & design tokens (dark theme, SourceTree-like) */
 
 :root {
 	--bg-app: #1b1d23;
@@ -311,6 +311,14 @@ textarea {
 	font-size: 11px;
 	border: 1px solid;
 	white-space: nowrap;
+	max-width: 100%;
+	min-width: 0;
+}
+.chip-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .chip-branch {
 	color: var(--green);
@@ -336,6 +344,13 @@ textarea {
 	color: var(--text-strong);
 	border-color: var(--border-strong);
 	background: var(--bg-panel-2);
+}
+.chip-more {
+	flex: none;
+	color: var(--text-dim);
+	border-color: var(--border-strong);
+	background: var(--bg-panel-2);
+	padding: 0 5px;
 }
 
 .spin {

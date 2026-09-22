@@ -7,7 +7,7 @@ import type { MenuItem } from '../../stores/ui'
 import type { FileStatus } from '../../api'
 import { copyText } from '../../api'
 import { STATUS_LABELS, statusColor, basename, dirname } from '../../utils/format'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const repo = useRepo()
 const ui = useUI()

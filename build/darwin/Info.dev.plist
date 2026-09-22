@@ -4,15 +4,17 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>My Product</string>
+            <string>Git View</string>
+        <key>CFBundleDisplayName</key>
+            <string>Git View</string>
         <key>CFBundleExecutable</key>
-            <string>gitview</string>
+            <string>Git View</string>
         <key>CFBundleIdentifier</key>
-            <string>com.example.gitview</string>
+            <string>com.gitview.desktop</string>
         <key>CFBundleVersion</key>
             <string>0.1.0</string>
         <key>CFBundleGetInfoString</key>
-            <string>This is a comment</string>
+            <string>Git View - a visual Git client</string>
         <key>CFBundleShortVersionString</key>
             <string>0.1.0</string>
         <key>CFBundleIconFile</key>

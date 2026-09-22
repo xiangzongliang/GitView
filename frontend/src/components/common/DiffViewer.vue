@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import hljs from 'highlight.js/lib/common'
 import { parseDiff, langFromPath } from '../../utils/diff'
 import type { DiffLine } from '../../utils/diff'
-import Icon from './Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const props = withDefaults(
   defineProps<{

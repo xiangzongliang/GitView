@@ -12,6 +12,7 @@ export type {
     BranchInfo,
     BranchOptions,
     CloneOptions,
+    CommandResult,
     Commit,
     CommitFile,
     CommitOptions,

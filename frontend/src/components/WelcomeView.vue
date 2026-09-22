@@ -2,7 +2,7 @@
 import { useRepos } from '../stores/repos'
 import { useUI } from '../stores/ui'
 import { pickDirectory } from '../api'
-import Icon from './common/Icon.vue'
+import Icon from './ui/Icon.vue'
 
 const repos = useRepos()
 const ui = useUI()
@@ -18,7 +18,7 @@ async function initRepo() {
     <div class="logo">
       <Icon name="repo" :size="42" />
     </div>
-    <h1 class="title">GitView</h1>
+    <h1 class="title">Git View</h1>
     <p class="subtitle">轻量级 Git 可视化客户端 — 打开一个本地仓库开始使用</p>
     <div class="actions">
       <button class="btn btn-primary big" @click="repos.pickAndOpen()">

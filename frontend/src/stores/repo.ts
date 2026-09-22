@@ -41,6 +41,8 @@ export const useRepo = defineStore("repo", {
 		logSearch: "",
 		logLoading: false,
 		logHasMore: true,
+		/** increments on every log query; stale in-flight responses are discarded */
+		logGen: 0,
 		selectedHash: "",
 		selectedCommit: null as Commit | null,
 		commitFiles: [] as CommitFile[],
@@ -155,7 +157,12 @@ export const useRepo = defineStore("repo", {
 		},
 
 		async loadLog(reset = false) {
-			if (!this.path || this.logLoading) return;
+			if (!this.path) return;
+			// Pagination is skipped while loading; a reset always supersedes
+			// in-flight loads via the generation token so pages from different
+			// branches/queries can never be mixed into one list.
+			if (!reset && this.logLoading) return;
+			const gen = ++this.logGen;
 			this.logLoading = true;
 			try {
 				const skip = reset ? 0 : this.commits.length;
@@ -167,6 +174,7 @@ export const useRepo = defineStore("repo", {
 						search: this.logSearch,
 						file: "",
 					})) || [];
+				if (gen !== this.logGen) return; // superseded by a newer query
 				if (reset) {
 					this.commits = page;
 				} else {
@@ -174,10 +182,11 @@ export const useRepo = defineStore("repo", {
 				}
 				this.logHasMore = page.length >= LOG_PAGE;
 			} catch (e) {
+				if (gen !== this.logGen) return;
 				useUI().error("加载提交历史失败", errMsg(e));
 				this.logHasMore = false;
 			} finally {
-				this.logLoading = false;
+				if (gen === this.logGen) this.logLoading = false;
 			}
 		},
 

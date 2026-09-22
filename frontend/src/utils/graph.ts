@@ -19,6 +19,12 @@ export interface GraphCurve {
 	from: number;
 	/** lane the curve lands on at the bottom edge of the row */
 	to: number;
+	/**
+	 * 'down' (default): dot at `from` → bottom edge at `to` (merges, collapses).
+	 * 'in': top edge at `from` → dot at `to` — another lane that expected the
+	 * same commit converges into it on this row (criss-cross merges).
+	 */
+	kind?: "down" | "in";
 }
 
 export interface GraphRow {
@@ -41,6 +47,14 @@ export interface GraphLayout {
 	laneCount: number;
 }
 
+export interface LayoutOptions {
+	/**
+	 * Filtered log (e.g. --grep search): parent/child links are broken so lane
+	 * layout is meaningless and dangles. Draw a simple single-lane line instead.
+	 */
+	sparse?: boolean;
+}
+
 export function laneX(lane: number): number {
 	return GRAPH_PAD + lane * LANE_W + LANE_W / 2;
 }
@@ -49,7 +63,23 @@ export function graphWidth(laneCount: number): number {
 	return GRAPH_PAD * 2 + Math.max(1, laneCount) * LANE_W;
 }
 
-export function layoutGraph(commits: Commit[]): GraphLayout {
+export function layoutGraph(
+	commits: Commit[],
+	opts?: LayoutOptions,
+): GraphLayout {
+	if (opts?.sparse) {
+		const rows: GraphRow[] = commits.map((c, i) => ({
+			commit: c,
+			lane: 0,
+			through: [],
+			top: i > 0,
+			bottom: i < commits.length - 1,
+			curves: [],
+			isNew: false,
+		}));
+		return { rows, laneCount: 1 };
+	}
+
 	const rows: GraphRow[] = [];
 	let lanes: string[] = []; // expected hash per lane; '' = free
 	let laneCount = 0;
@@ -80,6 +110,17 @@ export function layoutGraph(commits: Commit[]): GraphLayout {
 		if (isNew) lane = allocLane();
 
 		const curves: GraphCurve[] = [];
+
+		// Other lanes may expect this same commit (e.g. two branches sharing a
+		// parent, or criss-cross merges). They converge into `lane` here and are
+		// released; without this they would dangle forever as stray verticals.
+		for (let i = 0; i < lanes.length; i++) {
+			if (i !== lane && lanes[i] === c.hash) {
+				lanes[i] = "";
+				curves.push({ from: i, to: lane, kind: "in" });
+			}
+		}
+
 		const parents = c.parents || [];
 		let bottom = false;
 
@@ -114,10 +155,16 @@ export function layoutGraph(commits: Commit[]): GraphLayout {
 		}
 
 		const nextActive: boolean[] = lanes.map((h) => h !== "");
+		// Lanes with an 'in' curve end at the dot this row; never draw them as
+		// straight verticals (they may even be re-allocated for a merge parent).
+		const inLanes = new Set<number>();
+		for (const cv of curves) {
+			if (cv.kind === "in") inLanes.add(cv.from);
+		}
 		const through: number[] = [];
 		const max = Math.max(prevActive.length, nextActive.length);
 		for (let i = 0; i < max; i++) {
-			if (i === lane) continue;
+			if (i === lane || inLanes.has(i)) continue;
 			if (prevActive[i] && nextActive[i]) through.push(i);
 		}
 

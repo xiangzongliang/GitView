@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useUI } from '../../stores/ui'
-import Icon from './Icon.vue'
+import Icon from '../ui/Icon.vue'
 
 const ui = useUI()
 const icons: Record<string, string> = { success: 'check', error: 'alert', info: 'info' }

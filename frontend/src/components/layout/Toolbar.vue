@@ -3,7 +3,10 @@ import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useRepos } from '../../stores/repos'
 import { useUI } from '../../stores/ui'
-import Icon from '../common/Icon.vue'
+import Icon from '../ui/Icon.vue'
+import Tooltip from '../ui/Tooltip.vue'
+import SelectMenu from '../ui/SelectMenu.vue'
+import type { SelectEntry } from '../ui/types'
 
 const repo = useRepo()
 const repos = useRepos()
@@ -30,18 +33,34 @@ onBeforeUnmount(() => {
 })
 
 // ------------------------------------------------------------------ ref filter
-const refOptions = computed(() => {
+const refMenuOptions = computed<SelectEntry[]>(() => {
+  const opts: SelectEntry[] = [
+    { label: '所有分支', value: 'all' },
+    { label: '当前分支 (HEAD)', value: '' },
+  ]
   const branches = (repo.refs?.branches || [])
     .filter((b) => !b.isRemote)
-    .map((b) => ({ label: b.name, value: b.name }))
+    .map((b) => ({ label: b.name, value: b.name, icon: 'branch' }))
   const remotes = (repo.refs?.remotes || []).flatMap((r) =>
-    (r.branches || []).map((b) => ({ label: b.name, value: b.name }))
+    (r.branches || []).map((b) => ({ label: b.name, value: b.name, icon: 'cloud' }))
   )
   const tags = (repo.refs?.tags || []).map((t) => ({
     label: t.name,
     value: 'refs/tags/' + t.name,
+    icon: 'tag',
   }))
-  return { branches, remotes, tags }
+  if (branches.length) opts.push({ group: '本地分支', options: branches })
+  if (remotes.length) opts.push({ group: '远程分支', options: remotes })
+  if (tags.length) opts.push({ group: '标签', options: tags })
+  return opts
+})
+
+const refFilterIcon = computed(() => {
+  const v = repo.logRef
+  if (v === 'all') return 'history'
+  if (!v) return 'commit'
+  if (v.startsWith('refs/tags/')) return 'tag'
+  return 'branch'
 })
 </script>
 
@@ -72,48 +91,54 @@ const refOptions = computed(() => {
 
     <div class="sep" />
 
-    <!-- actions -->
-    <button class="btn" :disabled="!enabled || busy" title="Fetch（所有远程，含 prune）" @click="repo.fetch('', true)">
-      <Icon name="fetch" :size="13" /> Fetch
-    </button>
-    <button class="btn" :disabled="!enabled || busy" title="Pull…" @click="ui.openDialog('pull')">
-      <Icon name="pull" :size="13" /> Pull
-    </button>
-    <button class="btn" :disabled="!enabled || busy" title="Push…" @click="ui.openDialog('push')">
-      <Icon name="push" :size="13" /> Push
-    </button>
-    <button class="btn" :disabled="!enabled || busy" title="新建分支…" @click="ui.openDialog('branch')">
-      <Icon name="branch" :size="13" /> 分支
-    </button>
-    <button class="btn" :disabled="!enabled || busy" title="合并…" @click="ui.openDialog('merge')">
-      <Icon name="merge" :size="13" /> 合并
-    </button>
-    <button class="btn" :disabled="!enabled || busy" title="贮藏当前更改…" @click="ui.openDialog('stash')">
-      <Icon name="stash" :size="13" /> Stash
-    </button>
+    <!-- git actions: icon-only, tooltip on hover -->
+    <Tooltip text="Fetch（所有远程，含 prune）">
+      <button class="btn-icon tool-btn" :disabled="!enabled || busy" @click="repo.fetch('', true)">
+        <Icon name="fetch" :size="15" />
+      </button>
+    </Tooltip>
+    <Tooltip text="Pull…">
+      <button class="btn-icon tool-btn" :disabled="!enabled || busy" @click="ui.openDialog('pull')">
+        <Icon name="pull" :size="15" />
+      </button>
+    </Tooltip>
+    <Tooltip text="Push…">
+      <button class="btn-icon tool-btn" :disabled="!enabled || busy" @click="ui.openDialog('push')">
+        <Icon name="push" :size="15" />
+      </button>
+    </Tooltip>
+
+    <div class="sep" />
+
+    <Tooltip text="新建分支…">
+      <button class="btn-icon tool-btn" :disabled="!enabled || busy" @click="ui.openDialog('branch')">
+        <Icon name="branch" :size="15" />
+      </button>
+    </Tooltip>
+    <Tooltip text="合并…">
+      <button class="btn-icon tool-btn" :disabled="!enabled || busy" @click="ui.openDialog('merge')">
+        <Icon name="merge" :size="15" />
+      </button>
+    </Tooltip>
+    <Tooltip text="Stash 当前更改…">
+      <button class="btn-icon tool-btn" :disabled="!enabled || busy" @click="ui.openDialog('stash')">
+        <Icon name="stash" :size="15" />
+      </button>
+    </Tooltip>
 
     <div class="spacer" />
 
-    <!-- ref filter + search + refresh -->
-    <select
+    <!-- ref filter + search + terminal + refresh -->
+    <SelectMenu
       class="ref-select"
-      :value="repo.logRef"
+      :model-value="repo.logRef"
+      :options="refMenuOptions"
+      :icon="refFilterIcon"
       :disabled="!enabled"
-      title="历史过滤"
-      @change="repo.setLogRef(($event.target as HTMLSelectElement).value)"
-    >
-      <option value="all">所有分支</option>
-      <option value="">当前分支 (HEAD)</option>
-      <optgroup v-if="refOptions.branches.length" label="本地分支">
-        <option v-for="o in refOptions.branches" :key="o.value" :value="o.value">{{ o.label }}</option>
-      </optgroup>
-      <optgroup v-if="refOptions.remotes.length" label="远程分支">
-        <option v-for="o in refOptions.remotes" :key="o.value" :value="o.value">{{ o.label }}</option>
-      </optgroup>
-      <optgroup v-if="refOptions.tags.length" label="标签">
-        <option v-for="o in refOptions.tags" :key="o.value" :value="o.value">{{ o.label }}</option>
-      </optgroup>
-    </select>
+      :max-height="360"
+      :min-width="220"
+      @update:model-value="repo.setLogRef($event)"
+    />
 
     <div class="search-box">
       <Icon name="search" :size="12" class="search-icon" />
@@ -129,14 +154,22 @@ const refOptions = computed(() => {
       </button>
     </div>
 
-    <button
-      class="btn-icon"
-      :disabled="!enabled || busy"
-      title="刷新"
-      @click="repo.refreshAll()"
-    >
-      <Icon name="refresh" :size="14" :class="{ spin: busy }" />
-    </button>
+    <Tooltip text="终端（⌃`）">
+      <button
+        class="btn-icon tool-btn"
+        :class="{ active: ui.terminalOpen }"
+        :disabled="!enabled"
+        @click="ui.toggleTerminal()"
+      >
+        <Icon name="terminal" :size="15" />
+      </button>
+    </Tooltip>
+
+    <Tooltip text="刷新">
+      <button class="btn-icon tool-btn" :disabled="!enabled || busy" @click="repo.refreshAll()">
+        <Icon name="refresh" :size="15" :class="{ spin: busy }" />
+      </button>
+    </Tooltip>
   </div>
 </template>
 
@@ -187,10 +220,18 @@ const refOptions = computed(() => {
 .spacer {
   flex: 1;
 }
-.ref-select {
+.tool-btn {
+  width: 28px;
   height: 26px;
+  border-radius: 6px;
+  flex: none;
+}
+.tool-btn.active {
+  color: var(--accent);
+  background: var(--bg-selected);
+}
+.ref-select {
   max-width: 170px;
-  padding: 0 6px;
 }
 .search-box {
   position: relative;

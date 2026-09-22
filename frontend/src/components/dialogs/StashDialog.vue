@@ -2,8 +2,8 @@
 import { computed, ref } from 'vue'
 import { useRepo } from '../../stores/repo'
 import { useUI } from '../../stores/ui'
-import ModalDialog from '../common/ModalDialog.vue'
-import Icon from '../common/Icon.vue'
+import ModalDialog from '../ui/ModalDialog.vue'
+import Icon from '../ui/Icon.vue'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
@@ -28,9 +28,9 @@ async function submit() {
 </script>
 
 <template>
-  <ModalDialog title="贮藏（Stash）当前更改" :width="460" @close="emit('close')">
+  <ModalDialog title="Stash 当前更改" :width="460" @close="emit('close')">
     <div v-if="!canStash" class="warn">
-      <Icon name="info" :size="13" /> 工作区没有可贮藏的更改。
+      <Icon name="info" :size="13" /> 工作区没有可 Stash 的更改。
     </div>
     <template v-else>
       <label class="field">
@@ -49,9 +49,9 @@ async function submit() {
       </label>
       <label class="check">
         <input v-model="keepIndex" type="checkbox" />
-        贮藏后保留已暂存内容（--keep-index）
+        Stash 后保留已暂存内容（--keep-index）
       </label>
-      <p class="hint">共 {{ repo.dirtyCount }} 个文件将被贮藏，之后可随时在侧边栏“贮藏”中应用或弹出。</p>
+      <p class="hint">共 {{ repo.dirtyCount }} 个文件将被 Stash，之后可随时在侧边栏“Stash”中应用或弹出。</p>
     </template>
     <template #footer>
       <button class="btn" @click="emit('close')">取消</button>
