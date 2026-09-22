@@ -11,6 +11,7 @@
 		"preview": "vite preview"
 	},
 	"dependencies": {
+		"@lucide/vue": "^1.47.0",
 		"@wailsio/runtime": "latest",
 		"dayjs": "^1.11.23",
 		"highlight.js": "^11.12.0",
