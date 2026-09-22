@@ -17,6 +17,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(&GitService{}),
 			application.NewService(&RepoService{}),
+			application.NewService(&AppService{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -31,8 +32,8 @@ func main() {
 		Width:  1400,
 		Height: 900,
 		Mac: application.MacWindow{
-			// 顶部 50pt 为原生窗口拖拽区（该区域内不放交互控件）
-			InvisibleTitleBarHeight: 50,
+			// 顶部 24pt 为原生窗口拖拽区（该区域内不放交互控件）
+			InvisibleTitleBarHeight: 24,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 			CornerType:              application.MacWindowCornerTypeRounded,

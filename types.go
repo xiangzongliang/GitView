@@ -4,6 +4,7 @@ package main
 type RepoEntry struct {
 	Path       string `json:"path"`
 	Name       string `json:"name"`
+	Group      string `json:"group"` // user-defined group; "" = ungrouped
 	LastOpened int64  `json:"lastOpened"`
 	Missing    bool   `json:"missing"` // path no longer exists on disk
 }
@@ -175,10 +176,12 @@ type TagOptions struct {
 
 // CloneOptions configures a clone.
 type CloneOptions struct {
-	URL     string `json:"url"`
-	Parent  string `json:"parent"` // destination directory
-	Name    string `json:"name"`   // "" = derived from URL
-	Branch  string `json:"branch"` // "" = default
+	URL      string `json:"url"`
+	Parent   string `json:"parent"` // destination directory
+	Name     string `json:"name"`   // "" = derived from URL
+	Branch   string `json:"branch"` // "" = default
+	Username string `json:"username"`
+	Password string `json:"password"` // password or personal access token
 }
 
 // OpResult carries human-readable output of a git operation.

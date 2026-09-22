@@ -1182,3 +1182,45 @@ func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*C
 	res.Output = out
 	return res, nil
 }
+
+// ---------------------------------------------------------------------------
+// Global git configuration
+// ---------------------------------------------------------------------------
+
+// GlobalConfig returns the values of the git config keys the settings panel
+// exposes. Missing keys are returned as empty strings.
+func (s *GitService) GlobalConfig() (map[string]string, error) {
+	keys := []string{"user.name", "user.email", "core.editor", "init.defaultBranch"}
+	res := make(map[string]string, len(keys))
+	for _, k := range keys {
+		out, err := runGit("", "config", "--global", "--get", k)
+		if err != nil {
+			continue // unset or missing global file
+		}
+		res[k] = strings.TrimSpace(out)
+	}
+	return res, nil
+}
+
+// SetGlobalConfig writes one global git config key. An empty value unsets it.
+func (s *GitService) SetGlobalConfig(key, value string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return errors.New("配置项不能为空")
+	}
+	// Only allow manipulating known-safe keys from the settings UI.
+	switch key {
+	case "user.name", "user.email", "core.editor", "init.defaultBranch":
+	default:
+		return errors.New("不支持修改的配置项: " + key)
+	}
+	if strings.TrimSpace(value) == "" {
+		_, err := runGit("", "config", "--global", "--unset", key)
+		if err != nil && strings.Contains(err.Error(), "exit status 5") {
+			return nil // key was already unset
+		}
+		return err
+	}
+	_, err := runGit("", "config", "--global", key, strings.TrimSpace(value))
+	return err
+}

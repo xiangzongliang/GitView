@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,7 +68,8 @@ func (s *RepoService) save(cfg *appConfig) error {
 	return os.WriteFile(p, data, 0o644)
 }
 
-// ListRepos returns all registered repositories, most recently opened first.
+// ListRepos returns all registered repositories in stored order.
+// The order is user-managed (drag & drop) and persisted via SaveLayout.
 func (s *RepoService) ListRepos() ([]RepoEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -78,10 +81,44 @@ func (s *RepoService) ListRepos() ([]RepoEntry, error) {
 		_, statErr := os.Stat(cfg.Repos[i].Path)
 		cfg.Repos[i].Missing = statErr != nil
 	}
-	sort.Slice(cfg.Repos, func(i, j int) bool {
-		return cfg.Repos[i].LastOpened > cfg.Repos[j].LastOpened
-	})
 	return cfg.Repos, nil
+}
+
+// SaveLayout persists the repository order and group assignments exactly as
+// provided by the frontend (drag & drop result).
+func (s *RepoService) SaveLayout(entries []RepoEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.load()
+	if err != nil {
+		return err
+	}
+	// Keep LastOpened/Missing from the stored config; take order+group from input.
+	stored := make(map[string]RepoEntry, len(cfg.Repos))
+	for _, r := range cfg.Repos {
+		stored[r.Path] = r
+	}
+	out := make([]RepoEntry, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		prev, ok := stored[e.Path]
+		if !ok {
+			continue // unknown path: ignore
+		}
+		prev.Group = e.Group
+		_, statErr := os.Stat(prev.Path)
+		prev.Missing = statErr != nil
+		out = append(out, prev)
+		seen[e.Path] = true
+	}
+	// Append any stored repo missing from the input (safety net).
+	for _, r := range cfg.Repos {
+		if !seen[r.Path] {
+			out = append(out, r)
+		}
+	}
+	cfg.Repos = out
+	return s.save(cfg)
 }
 
 // OpenRepo validates a path, resolves it to the repository root and registers it.
@@ -125,7 +162,16 @@ func (s *RepoService) OpenRepo(path string) (*RepoEntry, error) {
 	if err := s.save(cfg); err != nil {
 		return nil, err
 	}
-	return &entry, nil
+	res := entry
+	if found {
+		for i := range cfg.Repos {
+			if cfg.Repos[i].Path == top {
+				res = cfg.Repos[i]
+				break
+			}
+		}
+	}
+	return &res, nil
 }
 
 // RemoveRepo unregisters a repository (files on disk are untouched).
@@ -146,12 +192,89 @@ func (s *RepoService) RemoveRepo(path string) error {
 	return s.save(cfg)
 }
 
+// injectCredentials embeds username/password into an https URL so git can
+// authenticate without an interactive prompt.
+func injectCredentials(rawURL, username, password string) string {
+	if username == "" && password == "" {
+		return rawURL
+	}
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		return rawURL
+	}
+	schemeEnd := strings.Index(rawURL, "://")
+	rest := rawURL[schemeEnd+3:]
+	// Strip any existing userinfo.
+	if at := strings.Index(rest, "@"); at >= 0 {
+		if slash := strings.Index(rest, "/"); slash < 0 || at < slash {
+			rest = rest[at+1:]
+		}
+	}
+	user := urlQueryEscape(username)
+	if password != "" {
+		user += ":" + urlQueryEscape(password)
+	}
+	return rawURL[:schemeEnd+3] + user + "@" + rest
+}
+
+func urlQueryEscape(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+			c == '-' || c == '_' || c == '.' || c == '~' {
+			b.WriteByte(c)
+			continue
+		}
+		fmt.Fprintf(&b, "%%%02X", c)
+	}
+	return b.String()
+}
+
+// RemoteBranches lists the heads of a remote repository without cloning it.
+// It is used by the clone dialog to offer a branch picker.
+func (s *RepoService) RemoteBranches(url, username, password string) ([]string, error) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return nil, errors.New("仓库地址不能为空")
+	}
+	target := injectCredentials(url, strings.TrimSpace(username), password)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := runGitCtx(ctx, "", "ls-remote", "--symref", "--heads", target)
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	headRef := ""
+	for _, line := range splitLines(out) {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		if fields[0] == "ref:" && len(fields) >= 3 {
+			headRef = strings.TrimPrefix(fields[2], "refs/heads/")
+			continue
+		}
+		if strings.HasPrefix(fields[1], "refs/heads/") {
+			branches = append(branches, strings.TrimPrefix(fields[1], "refs/heads/"))
+		}
+	}
+	// Put the remote HEAD branch first.
+	if headRef != "" {
+		sort.SliceStable(branches, func(i, j int) bool {
+			return branches[i] == headRef
+		})
+	}
+	return branches, nil
+}
+
 // Clone clones a remote repository and registers it.
 func (s *RepoService) Clone(opts CloneOptions) (*RepoEntry, error) {
 	url := strings.TrimSpace(opts.URL)
 	if url == "" {
 		return nil, errors.New("仓库地址不能为空")
 	}
+	url = injectCredentials(url, strings.TrimSpace(opts.Username), opts.Password)
 	name := strings.TrimSpace(opts.Name)
 	if name == "" {
 		name = nameFromURL(url)

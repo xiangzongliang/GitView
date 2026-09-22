@@ -1,8 +1,8 @@
 // Typed access to the Go backend via the auto-generated Wails bindings.
-import { GitService, RepoService } from "../../bindings/gitview";
+import { GitService, RepoService, AppService } from "../../bindings/gitview";
 import { Dialogs, Clipboard } from "@wailsio/runtime";
 
-export { GitService, RepoService };
+export { GitService, RepoService, AppService };
 
 export type {
 	BranchInfo,
