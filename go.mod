@@ -1,4 +1,4 @@
-module changeme
+module gitview
 
 go 1.25.0
 
