@@ -150,6 +150,47 @@ export interface FileStatus {
 }
 
 /**
+ * GitLogEntry records one executed command (git or built-in terminal shell) so
+ * the in-app debug window can show exactly what ran, how long it took and what
+ * it printed.
+ */
+export interface GitLogEntry {
+    "seq": number;
+
+    /**
+     * unix 毫秒
+     */
+    "time": number;
+
+    /**
+     * "git" | "shell"
+     */
+    "kind": string;
+
+    /**
+     * 命令的工作目录
+     */
+    "dir": string;
+
+    /**
+     * 完整命令行
+     */
+    "command": string;
+
+    /**
+     * 耗时（毫秒）
+     */
+    "duration": number;
+    "ok": boolean;
+    "error": string;
+
+    /**
+     * 输出（已截断）
+     */
+    "output": string;
+}
+
+/**
  * LogOptions controls a paginated git log query.
  */
 export interface LogOptions {
@@ -273,7 +314,6 @@ export interface RepoStatus {
     "unstaged": FileStatus[] | null;
     "untracked": FileStatus[] | null;
     "conflicted": FileStatus[] | null;
-    "stashCount": number;
     "merging": boolean;
     "rebasing": boolean;
     "cherryPicking": boolean;
@@ -327,4 +367,19 @@ export interface TagOptions {
     "message": string;
     "push": boolean;
     "remote": string;
+}
+
+/**
+ * WatchStatus describes the current watcher state (shown in the debug window).
+ */
+export interface WatchStatus {
+    "watching": boolean;
+    "repoPath": string;
+    "paths": number;
+    "error": string;
+
+    /**
+     * unix 毫秒
+     */
+    "lastPush": number;
 }

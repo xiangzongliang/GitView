@@ -270,6 +270,14 @@ onBeforeUnmount(detach);
 	border: 1px solid var(--border-strong);
 	border-radius: 8px;
 	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+	transform-origin: top center;
+	animation: sm-panel-in 0.14s ease-out;
+}
+@keyframes sm-panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px) scale(0.98);
+	}
 }
 .sm-group {
 	padding: 5px 8px 3px;

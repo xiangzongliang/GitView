@@ -156,7 +156,7 @@ export const useRepos = defineStore("repos", {
 		},
 		async clone(opts: CloneOptions): Promise<RepoEntry | null> {
 			const ui = useUI();
-			ui.opRunning = "正在克隆仓库…";
+			if (!ui.beginOp("clone", "正在克隆仓库…")) return null;
 			try {
 				const entry = await RepoService.Clone(opts);
 				if (!entry) {
@@ -171,7 +171,7 @@ export const useRepos = defineStore("repos", {
 				ui.error("克隆失败", errMsg(e));
 				return null;
 			} finally {
-				ui.opRunning = "";
+				ui.endOp();
 			}
 		},
 		async initRepo(dir: string): Promise<RepoEntry | null> {

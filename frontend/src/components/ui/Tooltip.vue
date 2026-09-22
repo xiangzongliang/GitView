@@ -125,5 +125,12 @@ function onLeave() {
 	line-height: 1.4;
 	white-space: nowrap;
 	pointer-events: none;
+	/* 只做淡入：transform 被用于定位，不能用动画覆盖 */
+	animation: tip-in 0.1s ease-out;
+}
+@keyframes tip-in {
+	from {
+		opacity: 0;
+	}
 }
 </style>

@@ -19,6 +19,7 @@ export type {
     CommitFile,
     CommitOptions,
     FileStatus,
+    GitLogEntry,
     LogOptions,
     MergeOptions,
     PullOptions,
@@ -31,5 +32,6 @@ export type {
     StashEntry,
     StashOptions,
     TagInfo,
-    TagOptions
+    TagOptions,
+    WatchStatus
 } from "./models.js";

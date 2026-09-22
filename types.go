@@ -30,7 +30,6 @@ type RepoStatus struct {
 	Unstaged      []FileStatus `json:"unstaged"`
 	Untracked     []FileStatus `json:"untracked"`
 	Conflicted    []FileStatus `json:"conflicted"`
-	StashCount    int          `json:"stashCount"`
 	Merging       bool         `json:"merging"`
 	Rebasing      bool         `json:"rebasing"`
 	CherryPicking bool         `json:"cherryPicking"`

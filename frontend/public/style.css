@@ -468,3 +468,14 @@ textarea {
 	gap: 8px;
 	color: var(--text-faint);
 }
+
+/* 无障碍：跟随系统“减少动画”设置，关闭弹窗/过渡动效 */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+	}
+}

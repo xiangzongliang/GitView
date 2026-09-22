@@ -4,6 +4,9 @@ import { useRepos } from "./stores/repos";
 import { useRepo } from "./stores/repo";
 import { useUI } from "./stores/ui";
 import { useSettings } from "./stores/settings";
+import { REPO_CHANGED_EVENT } from "./api";
+import type { RepoChange } from "./api";
+import { Events } from "@wailsio/runtime";
 import TitleBar from "./components/layout/TitleBar.vue";
 import Toolbar from "./components/layout/Toolbar.vue";
 import StatusBar from "./components/layout/StatusBar.vue";
@@ -17,6 +20,7 @@ import ContextMenu from "./components/common/ContextMenu.vue";
 import DialogHost from "./components/dialogs/DialogHost.vue";
 import OpBanner from "./components/common/OpBanner.vue";
 import SettingsPanel from "./components/settings/SettingsPanel.vue";
+import DebugPanel from "./components/common/DebugPanel.vue";
 
 const repos = useRepos();
 const repo = useRepo();
@@ -28,23 +32,56 @@ onMounted(() => {
 	repos.load();
 });
 
-// 轻量轮询：窗口可见且无操作进行时，定期刷新状态（外部变更可自动反映到 UI）
+// 仓库变化：正常由后端 fsnotify 推送 repo:changed 事件立即刷新，
+// 下面的轮询仅作为兵底（工作区内的文件改动不会触碰 .git，监听看不到）。
+const POLL_MS = 20000;
+const REFS_EVERY = 3; // 每 3 个 tick（≈60s）兜底刷新分支/标签/stash
 let pollTimer: number | undefined;
 let pollTick = 0;
 onMounted(() => {
 	pollTimer = window.setInterval(() => {
-		if (document.hidden || ui.opRunning || !repos.activePath || ui.dialog)
+		if (document.hidden || ui.busy || !repos.activePath || ui.dialog)
 			return;
 		pollTick++;
 		repo.refreshStatus();
-		if (pollTick % 3 === 0) {
+		if (pollTick % REFS_EVERY === 0) {
 			repo.refreshRefs();
 			repo.refreshStashes();
 		}
-	}, 4000);
+	}, POLL_MS);
 });
 onBeforeUnmount(() => {
 	if (pollTimer) window.clearInterval(pollTimer);
+});
+
+// 后端监听到仓库变化 → 按变更类型刷新对应数据（kind: status / refs / all）
+function applyRepoChange(kind: string) {
+	// 窗口不可见、有操作在执行或弹窗打开时不处理：操作自身会刷新，
+	// 回到前台时由 visibilitychange 统一补一次。
+	if (document.hidden || ui.busy || ui.dialog) return;
+	repo.refreshStatus();
+	if (kind === "refs" || kind === "all") {
+		repo.refreshRefs();
+		repo.refreshStashes();
+	}
+}
+
+let offRepoChanged: (() => void) | undefined;
+function onRepoChanged(ev: { data?: unknown }) {
+	const data = (ev.data || {}) as RepoChange;
+	if (data.repoPath && data.repoPath !== repo.path) return;
+	applyRepoChange(data.kind || "status");
+}
+function onVisibilityChange() {
+	if (!document.hidden) applyRepoChange("all");
+}
+onMounted(() => {
+	offRepoChanged = Events.On(REPO_CHANGED_EVENT, onRepoChanged);
+	document.addEventListener("visibilitychange", onVisibilityChange);
+});
+onBeforeUnmount(() => {
+	offRepoChanged?.();
+	document.removeEventListener("visibilitychange", onVisibilityChange);
 });
 
 // 全局快捷键：⌃` 开关内置终端
@@ -87,10 +124,16 @@ watch(
 	() => repos.activePath,
 	(p) => {
 		if (p) switchRepo(p);
-		else if (repo.path) repo.$reset();
+		else if (repo.path) {
+			repo.unwatch();
+			repo.$reset();
+		}
 	},
 	{ immediate: true },
 );
+
+// 退出时停止后端监听
+onBeforeUnmount(() => repo.unwatch());
 </script>
 
 <template>
@@ -116,15 +159,10 @@ watch(
 		<TerminalPanel v-if="repos.activePath" />
 		<StatusBar />
 		<SettingsPanel />
+		<DebugPanel />
 		<Toasts />
 		<ContextMenu />
 		<DialogHost />
-		<div v-if="ui.opRunning" class="op-overlay">
-			<div class="op-overlay-box">
-				<span class="spinner" />
-				<span>{{ ui.opRunning }}</span>
-			</div>
-		</div>
 	</div>
 </template>
 
@@ -150,33 +188,5 @@ watch(
 .sidebar-resizer:active::after {
 	background: var(--accent);
 	width: 2px;
-}
-.op-overlay {
-	position: fixed;
-	inset: 0;
-	background: var(--overlay-bg);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 900;
-}
-.op-overlay-box {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	background: var(--bg-panel-2);
-	border: 1px solid var(--border-strong);
-	border-radius: 10px;
-	padding: 14px 22px;
-	color: var(--text-strong);
-	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-}
-.spinner {
-	width: 16px;
-	height: 16px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 </style>

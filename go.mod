@@ -2,7 +2,10 @@ module gitview
 
 go 1.25.0
 
-require github.com/wailsapp/wails/v3 v3.0.0-beta.6
+require (
+	github.com/fsnotify/fsnotify v1.7.0
+	github.com/wailsapp/wails/v3 v3.0.0-beta.6
+)
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect

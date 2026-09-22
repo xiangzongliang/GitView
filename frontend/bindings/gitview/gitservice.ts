@@ -315,6 +315,28 @@ export function UnstageAll(repoPath: string): $CancellablePromise<void> {
 }
 
 /**
+ * UnwatchRepo stops watching the current repository.
+ */
+export function UnwatchRepo(): $CancellablePromise<void> {
+    return $Call.ByID(626950201);
+}
+
+/**
+ * WatchRepo starts watching repoPath and pushes "repo:changed" events on
+ * changes. Watching an already-watched path is a no-op.
+ */
+export function WatchRepo(repoPath: string): $CancellablePromise<$models.WatchStatus | null> {
+    return $Call.ByID(422539044, repoPath);
+}
+
+/**
+ * WatchStatus returns the current watcher state.
+ */
+export function WatchStatus(): $CancellablePromise<$models.WatchStatus | null> {
+    return $Call.ByID(676392506);
+}
+
+/**
  * WorktreeDiff returns the diff of a file: staged (index vs HEAD) or unstaged
  * (worktree vs index). Untracked files get a synthesized "new file" diff.
  */

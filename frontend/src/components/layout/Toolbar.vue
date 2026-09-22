@@ -4,6 +4,7 @@ import { useRepo } from "../../stores/repo";
 import { useRepos } from "../../stores/repos";
 import { useUI } from "../../stores/ui";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
 import Tooltip from "../ui/Tooltip.vue";
 import SelectMenu from "../ui/SelectMenu.vue";
 import type { SelectEntry } from "../ui/types";
@@ -14,6 +15,13 @@ const ui = useUI();
 
 const enabled = computed(() => !!repos.activePath);
 const busy = computed(() => !!ui.opRunning);
+
+// 与上游的差距：behind = 可拉取的提交数，ahead = 待推送的提交数
+const behind = computed(() => repo.status?.behind || 0);
+const ahead = computed(() => repo.status?.ahead || 0);
+function countText(n: number): string {
+	return n > 99 ? "99+" : String(n);
+}
 
 // ------------------------------------------------------------- search debounce
 const search = ref(repo.logSearch);
@@ -104,25 +112,38 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="repo.fetch('', true)"
 			>
-				<Icon name="fetch" :size="15" />
+				<Spinner v-if="ui.isOp('fetch')" :size="13" />
+				<Icon v-else name="fetch" :size="15" />
 			</button>
 		</Tooltip>
-		<Tooltip text="Pull">
+		<Tooltip :text="behind ? `Pull：落后上游 ${behind} 个提交` : 'Pull'">
 			<button
 				class="btn-icon tool-btn"
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('pull')"
 			>
-				<Icon name="pull" :size="15" />
+				<Spinner v-if="ui.isOp('pull')" :size="13" />
+				<Icon v-else name="pull" :size="15" />
+				<span
+					v-if="behind && !ui.isOp('pull')"
+					class="tool-count pull"
+					>{{ countText(behind) }}</span
+				>
 			</button>
 		</Tooltip>
-		<Tooltip text="Push">
+		<Tooltip :text="ahead ? `Push：待推送 ${ahead} 个提交` : 'Push'">
 			<button
 				class="btn-icon tool-btn"
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('push')"
 			>
-				<Icon name="push" :size="15" />
+				<Spinner v-if="ui.isOp('push')" :size="13" />
+				<Icon v-else name="push" :size="15" />
+				<span
+					v-if="ahead && !ui.isOp('push')"
+					class="tool-count push"
+					>{{ countText(ahead) }}</span
+				>
 			</button>
 		</Tooltip>
 
@@ -134,7 +155,8 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('branch')"
 			>
-				<Icon name="branch" :size="15" />
+				<Spinner v-if="ui.isOp('branch')" :size="13" />
+				<Icon v-else name="branch" :size="15" />
 			</button>
 		</Tooltip>
 		<Tooltip text="合并">
@@ -143,7 +165,11 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('merge')"
 			>
-				<Icon name="merge" :size="15" />
+				<Spinner
+					v-if="ui.isOp('merge') || ui.isOp('rebase')"
+					:size="13"
+				/>
+				<Icon v-else name="merge" :size="15" />
 			</button>
 		</Tooltip>
 		<Tooltip text="Stash 当前更改">
@@ -152,7 +178,8 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('stash')"
 			>
-				<Icon name="stash" :size="15" />
+				<Spinner v-if="ui.isOp('stash')" :size="13" />
+				<Icon v-else name="stash" :size="15" />
 			</button>
 		</Tooltip>
 
@@ -266,10 +293,32 @@ const refFilterIcon = computed(() => {
 	flex: 1;
 }
 .tool-btn {
+	position: relative;
 	width: 28px;
 	height: 26px;
 	border-radius: 6px;
 	flex: none;
+}
+/* 需拉取 / 待推送的提交数角标 */
+.tool-count {
+	position: absolute;
+	top: -3px;
+	right: -4px;
+	min-width: 15px;
+	height: 15px;
+	padding: 0 4px;
+	border: 1.5px solid var(--bg-panel);
+	border-radius: 8px;
+	background: var(--accent);
+	color: #fff;
+	font-size: 9.5px;
+	font-weight: 700;
+	line-height: 12px;
+	text-align: center;
+	pointer-events: none;
+}
+.tool-count.pull {
+	background: var(--green);
 }
 .tool-btn.active {
 	color: var(--accent);

@@ -27,7 +27,8 @@ const logFormat = "%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%D%x1f%s%x1f%b%x1e"
 
 // Status returns the working tree / index state of the repository.
 func (s *GitService) Status(repoPath string) (*RepoStatus, error) {
-	out, err := runGit(repoPath, "-c", "core.quotepath=false", "status", "--porcelain=v1", "-z", "--branch")
+	// runGitRO：不写 index（否则会与仓库监听形成自激刷新循环）
+	out, err := runGitRO(repoPath, "-c", "core.quotepath=false", "status", "--porcelain=v1", "-z", "--branch")
 	if err != nil {
 		return nil, err
 	}
@@ -100,10 +101,8 @@ func (s *GitService) Status(repoPath string) (*RepoStatus, error) {
 		st.Reverting = pathExists(filepath.Join(gd, "REVERT_HEAD"))
 	}
 
-	// Stash count.
-	if stashOut, err := runGit(repoPath, "stash", "list", "--format=%gd"); err == nil {
-		st.StashCount = len(splitLines(stashOut))
-	}
+	// Stash 条数不在这里统计：stash 列表由前端单独的 refreshStashes 维护（见
+	// StatusBar 使用的 repo.stashes），避免每次轮询都多起一个 git 进程。
 
 	if st.Detached && st.Branch == "" {
 		st.Branch = describeDetached(repoPath, st.Head)
@@ -720,7 +719,8 @@ func (s *GitService) WorktreeDiff(repoPath string, file string, staged bool) (st
 		args = append(args, "--staged")
 	}
 	args = append(args, "--", file)
-	out, err := runGit(repoPath, args...)
+	// runGitRO：git diff 也会顺带刷新 index，关掉可选写入
+	out, err := runGitRO(repoPath, args...)
 	if err != nil {
 		return "", err
 	}
@@ -737,7 +737,7 @@ const untrackedDiffLimit = 2 << 20 // 2 MB
 func (s *GitService) synthesizeUntrackedDiff(repoPath, file string) (string, bool) {
 	// Only synthesize for genuinely untracked files; an empty diff for a
 	// tracked file simply means "no changes".
-	if st, err := runGit(repoPath, "status", "--porcelain=v1", "-z", "--", file); err != nil ||
+	if st, err := runGitRO(repoPath, "status", "--porcelain=v1", "-z", "--", file); err != nil ||
 		!strings.HasPrefix(st, "?? ") {
 		return "", false
 	}
@@ -1181,6 +1181,7 @@ func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*C
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	runStart := time.Now()
 	runErr := cmd.Run()
 
 	out := buf.String()
@@ -1208,6 +1209,25 @@ func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*C
 			return nil, runErr
 		}
 	}
+
+	// 记录到调试日志（终端命令也算“执行过的命令”）。
+	logEntry := GitLogEntry{
+		Time:     runStart.UnixMilli(),
+		Kind:     "shell",
+		Dir:      dir,
+		Command:  command,
+		Duration: time.Since(runStart).Milliseconds(),
+		Output:   out,
+	}
+	switch {
+	case res.Timeout:
+		logEntry.Error = "超时（5 分钟），已终止"
+	case res.ExitCode != 0:
+		logEntry.Error = "退出码 " + strconv.Itoa(res.ExitCode)
+	default:
+		logEntry.OK = true
+	}
+	recordCommand(logEntry)
 
 	// Cap output: keep the tail (most recent), which is what users care about.
 	const maxOut = 256 * 1024

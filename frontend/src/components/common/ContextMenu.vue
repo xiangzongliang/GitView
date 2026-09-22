@@ -101,6 +101,14 @@ function click(action?: () => void) {
 	border-radius: 8px;
 	padding: 4px;
 	box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+	transform-origin: top left;
+	animation: ctx-in 0.13s ease-out;
+}
+@keyframes ctx-in {
+	from {
+		opacity: 0;
+		transform: scale(0.96) translateY(-4px);
+	}
 }
 .ctx-item {
 	display: flex;

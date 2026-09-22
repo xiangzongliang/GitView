@@ -56,6 +56,11 @@ export const useRepo = defineStore("repo", {
 		fileDiffLoading: false,
 		commitMessage: "",
 		amend: false,
+		/** 正在执行文件级操作（暂存/取消/丢弃）的路径：对应行显示局部 loading */
+		pendingPaths: [] as string[],
+		/** refreshStatus 并发合并标记 */
+		statusLoading: false,
+		statusQueued: false,
 	}),
 	getters: {
 		dirtyCount(s): number {
@@ -89,7 +94,14 @@ export const useRepo = defineStore("repo", {
 		attach(path: string) {
 			this.$reset();
 			this.path = path;
+			// 让后端监听该仓库（fsnotify → repo:changed 事件），失败时退回兜底轮询
+			GitService.WatchRepo(path).catch(() => {});
 			this.refreshAll();
+		},
+
+		/** 取消后端对当前仓库的监听（关闭仓库时调用）。 */
+		unwatch() {
+			GitService.UnwatchRepo().catch(() => {});
 		},
 
 		async refreshAll() {
@@ -116,11 +128,19 @@ export const useRepo = defineStore("repo", {
 
 		async refreshStatus() {
 			if (!this.path) return;
+			// 合并并发请求：一次未完成时只记一个尾随标记，避免刷新堆叠
+			if (this.statusLoading) {
+				this.statusQueued = true;
+				return;
+			}
+			this.statusLoading = true;
 			try {
 				this.status = await GitService.Status(this.path);
 				this.statusError = "";
 			} catch (e) {
 				this.statusError = errMsg(e);
+			} finally {
+				this.statusLoading = false;
 			}
 			// Selected file may be gone after external changes.
 			if (this.selectedFile && this.status) {
@@ -135,6 +155,10 @@ export const useRepo = defineStore("repo", {
 					this.selectedFile = null;
 					this.fileDiff = "";
 				}
+			}
+			if (this.statusQueued) {
+				this.statusQueued = false;
+				void this.refreshStatus();
 			}
 		},
 
@@ -265,14 +289,20 @@ export const useRepo = defineStore("repo", {
 
 		// ------------------------------------------------------------------ ops
 
-		/** Run a git operation with spinner + toast + auto refresh. */
+		/** Run a git operation with local loading + toast + auto refresh.
+		 *  key 用于把 loading 显示在发起该操作的控件上；同一时刻只允许一个操作，
+		 *  重复触发会被直接忽略（防止重复执行）。 */
 		async runOp<T>(
 			label: string,
 			fn: () => Promise<T>,
-			opts?: { silent?: boolean; refresh?: () => Promise<void> },
+			opts?: {
+				silent?: boolean;
+				refresh?: () => Promise<void>;
+				key?: string;
+			},
 		): Promise<T | null> {
 			const ui = useUI();
-			ui.opRunning = label + "…";
+			if (!ui.beginOp(opts?.key || "op", label + "…")) return null;
 			try {
 				const r = await fn();
 				if (opts?.refresh) await opts.refresh();
@@ -284,18 +314,34 @@ export const useRepo = defineStore("repo", {
 				await this.refreshStatus();
 				return null;
 			} finally {
-				ui.opRunning = "";
+				ui.endOp();
 			}
 		},
 
+		/** 标记若干路径正在执行文件级操作（供列表行显示局部 loading）。 */
+		async withPending<T>(
+			paths: string[],
+			fn: () => Promise<T>,
+		): Promise<T> {
+			this.pendingPaths = [...paths];
+			try {
+				return await fn();
+			} finally {
+				this.pendingPaths = [];
+			}
+		},
+
+		isPending(path: string): boolean {
+			return this.pendingPaths.includes(path);
+		},
+
 		stagePaths(paths: string[]) {
-			return this.runOp(
-				"暂存",
-				() => GitService.Stage(this.path, paths),
-				{
+			return this.withPending(paths, () =>
+				this.runOp("暂存", () => GitService.Stage(this.path, paths), {
 					silent: true,
 					refresh: () => this.refreshStatus(),
-				},
+					key: "files",
+				}),
 			);
 		},
 		stageAll() {
@@ -305,17 +351,21 @@ export const useRepo = defineStore("repo", {
 				{
 					silent: true,
 					refresh: () => this.refreshStatus(),
+					key: "files",
 				},
 			);
 		},
 		unstagePaths(paths: string[]) {
-			return this.runOp(
-				"取消暂存",
-				() => GitService.Unstage(this.path, paths),
-				{
-					silent: true,
-					refresh: () => this.refreshStatus(),
-				},
+			return this.withPending(paths, () =>
+				this.runOp(
+					"取消暂存",
+					() => GitService.Unstage(this.path, paths),
+					{
+						silent: true,
+						refresh: () => this.refreshStatus(),
+						key: "files",
+					},
+				),
 			);
 		},
 		unstageAll() {
@@ -325,16 +375,20 @@ export const useRepo = defineStore("repo", {
 				{
 					silent: true,
 					refresh: () => this.refreshStatus(),
+					key: "files",
 				},
 			);
 		},
 		discardPaths(paths: string[]) {
-			return this.runOp(
-				"丢弃更改",
-				() => GitService.Discard(this.path, paths),
-				{
-					refresh: () => this.refreshStatus(),
-				},
+			return this.withPending(paths, () =>
+				this.runOp(
+					"丢弃更改",
+					() => GitService.Discard(this.path, paths),
+					{
+						refresh: () => this.refreshStatus(),
+						key: "files",
+					},
+				),
 			);
 		},
 
@@ -346,7 +400,8 @@ export const useRepo = defineStore("repo", {
 				return false;
 			}
 			const ui = useUI();
-			ui.opRunning = amend ? "Amend 提交…" : "提交…";
+			if (!ui.beginOp("commit", amend ? "Amend 提交…" : "提交…"))
+				return false;
 			try {
 				const hash = await GitService.Commit(this.path, {
 					message: msg,
@@ -368,39 +423,49 @@ export const useRepo = defineStore("repo", {
 				await this.refreshStatus();
 				return false;
 			} finally {
-				ui.opRunning = "";
+				ui.endOp();
 			}
 		},
 
 		checkout(ref: string) {
-			return this.runOp("检出 " + ref, () =>
-				GitService.Checkout(this.path, ref),
+			return this.runOp(
+				"检出 " + ref,
+				() => GitService.Checkout(this.path, ref),
+				{ key: "branch" },
 			);
 		},
 		createBranch(opts: BranchOptions) {
-			return this.runOp("创建分支 " + opts.name, () =>
-				GitService.CreateBranch(this.path, opts),
+			return this.runOp(
+				"创建分支 " + opts.name,
+				() => GitService.CreateBranch(this.path, opts),
+				{ key: "branch" },
 			);
 		},
 		deleteBranch(name: string, force: boolean) {
-			return this.runOp("删除分支 " + name, () =>
-				GitService.DeleteBranch(this.path, name, force),
+			return this.runOp(
+				"删除分支 " + name,
+				() => GitService.DeleteBranch(this.path, name, force),
+				{ key: "branch" },
 			);
 		},
 		deleteRemoteBranch(remote: string, name: string) {
-			return this.runOp("删除远程分支 " + name, () =>
-				GitService.DeleteRemoteBranch(this.path, remote, name),
+			return this.runOp(
+				"删除远程分支 " + name,
+				() => GitService.DeleteRemoteBranch(this.path, remote, name),
+				{ key: "branch" },
 			);
 		},
 		async renameBranch(oldName: string, newName: string): Promise<boolean> {
-			const r = await this.runOp("重命名分支", () =>
-				GitService.RenameBranch(this.path, oldName, newName),
+			const r = await this.runOp(
+				"重命名分支",
+				() => GitService.RenameBranch(this.path, oldName, newName),
+				{ key: "branch" },
 			);
 			return r !== null;
 		},
 		async merge(opts: MergeOptions) {
 			const ui = useUI();
-			ui.opRunning = "合并 " + opts.ref + "…";
+			if (!ui.beginOp("merge", "合并 " + opts.ref + "…")) return false;
 			try {
 				await GitService.Merge(this.path, opts);
 				await this.refreshAll();
@@ -427,62 +492,84 @@ export const useRepo = defineStore("repo", {
 				ui.error("合并失败", errMsg(e));
 				return false;
 			} finally {
-				ui.opRunning = "";
+				ui.endOp();
 			}
 		},
 		mergeAbort() {
-			return this.runOp("中止合并", () =>
-				GitService.MergeAbort(this.path),
+			return this.runOp(
+				"中止合并",
+				() => GitService.MergeAbort(this.path),
+				{ key: "merge" },
 			);
 		},
 		rebase(onto: string) {
-			return this.runOp("Rebase 到 " + onto, () =>
-				GitService.Rebase(this.path, onto),
+			return this.runOp(
+				"Rebase 到 " + onto,
+				() => GitService.Rebase(this.path, onto),
+				{ key: "rebase" },
 			);
 		},
 		rebaseAbort() {
-			return this.runOp("中止 rebase", () =>
-				GitService.RebaseAbort(this.path),
+			return this.runOp(
+				"中止 rebase",
+				() => GitService.RebaseAbort(this.path),
+				{ key: "rebase" },
 			);
 		},
 		rebaseContinue() {
-			return this.runOp("继续 rebase", () =>
-				GitService.RebaseContinue(this.path),
+			return this.runOp(
+				"继续 rebase",
+				() => GitService.RebaseContinue(this.path),
+				{ key: "rebase" },
 			);
 		},
 		rebaseSkip() {
-			return this.runOp("跳过 rebase 补丁", () =>
-				GitService.RebaseSkip(this.path),
+			return this.runOp(
+				"跳过 rebase 补丁",
+				() => GitService.RebaseSkip(this.path),
+				{ key: "rebase" },
 			);
 		},
 		cherryPick(hash: string) {
-			return this.runOp("Cherry-pick " + hash.slice(0, 8), () =>
-				GitService.CherryPick(this.path, hash),
+			return this.runOp(
+				"Cherry-pick " + hash.slice(0, 8),
+				() => GitService.CherryPick(this.path, hash),
+				{ key: "cherry-pick" },
 			);
 		},
 		cherryPickAbort() {
-			return this.runOp("中止 cherry-pick", () =>
-				GitService.CherryPickAbort(this.path),
+			return this.runOp(
+				"中止 cherry-pick",
+				() => GitService.CherryPickAbort(this.path),
+				{ key: "cherry-pick" },
 			);
 		},
 		cherryPickContinue() {
-			return this.runOp("继续 cherry-pick", () =>
-				GitService.CherryPickContinue(this.path),
+			return this.runOp(
+				"继续 cherry-pick",
+				() => GitService.CherryPickContinue(this.path),
+				{ key: "cherry-pick" },
 			);
 		},
 		revertCommit(hash: string) {
-			return this.runOp("Revert " + hash.slice(0, 8), () =>
-				GitService.Revert(this.path, hash),
+			return this.runOp(
+				"Revert " + hash.slice(0, 8),
+				() => GitService.Revert(this.path, hash),
+				{ key: "revert" },
 			);
 		},
 		revertAbort() {
-			return this.runOp("中止 revert", () =>
-				GitService.RevertAbort(this.path),
+			return this.runOp(
+				"中止 revert",
+				() => GitService.RevertAbort(this.path),
+				{ key: "revert" },
 			);
 		},
 		reset(target: string, mode: string) {
-			return this.runOp("Reset (" + mode + ")", () =>
-				GitService.Reset(this.path, target, mode),
+			return this.runOp(
+				"Reset (" + mode + ")",
+				() => GitService.Reset(this.path, target, mode),
+				{ key: "reset" },
 			);
 		},
 
@@ -492,6 +579,7 @@ export const useRepo = defineStore("repo", {
 				() => GitService.Fetch(this.path, remote, prune),
 				{
 					silent: true,
+					key: "fetch",
 				},
 			);
 			if (out !== null) {
@@ -502,7 +590,7 @@ export const useRepo = defineStore("repo", {
 			const out = await this.runOp(
 				"Pull",
 				() => GitService.Pull(this.path, opts),
-				{ silent: true },
+				{ silent: true, key: "pull" },
 			);
 			if (out !== null)
 				useUI().success("Pull 完成", (out || "").trim() || undefined);
@@ -512,7 +600,7 @@ export const useRepo = defineStore("repo", {
 			const out = await this.runOp(
 				"Push",
 				() => GitService.Push(this.path, opts),
-				{ silent: true },
+				{ silent: true, key: "push" },
 			);
 			if (out !== null)
 				useUI().success("Push 完成", (out || "").trim() || undefined);
@@ -520,35 +608,49 @@ export const useRepo = defineStore("repo", {
 		},
 
 		stashSave(opts: StashOptions) {
-			return this.runOp("Stash", () =>
-				GitService.StashSave(this.path, opts),
+			return this.runOp(
+				"Stash",
+				() => GitService.StashSave(this.path, opts),
+				{ key: "stash" },
 			);
 		},
 		stashPop(index: number) {
-			return this.runOp("Stash pop", () =>
-				GitService.StashPop(this.path, index),
+			return this.runOp(
+				"Stash pop",
+				() => GitService.StashPop(this.path, index),
+				{ key: "stash" },
 			);
 		},
 		stashApply(index: number) {
-			return this.runOp("Stash apply", () =>
-				GitService.StashApply(this.path, index),
+			return this.runOp(
+				"Stash apply",
+				() => GitService.StashApply(this.path, index),
+				{ key: "stash" },
 			);
 		},
 		stashDrop(index: number) {
-			return this.runOp("删除 stash", async () => {
-				await GitService.StashDrop(this.path, index);
-				await this.refreshStashes();
-			});
+			return this.runOp(
+				"删除 stash",
+				async () => {
+					await GitService.StashDrop(this.path, index);
+					await this.refreshStashes();
+				},
+				{ key: "stash" },
+			);
 		},
 
 		createTag(opts: TagOptions) {
-			return this.runOp("创建标签 " + opts.name, () =>
-				GitService.CreateTag(this.path, opts),
+			return this.runOp(
+				"创建标签 " + opts.name,
+				() => GitService.CreateTag(this.path, opts),
+				{ key: "tag" },
 			);
 		},
 		deleteTag(name: string, remote: string) {
-			return this.runOp("删除标签 " + name, () =>
-				GitService.DeleteTag(this.path, name, remote),
+			return this.runOp(
+				"删除标签 " + name,
+				() => GitService.DeleteTag(this.path, name, remote),
+				{ key: "tag" },
 			);
 		},
 	},

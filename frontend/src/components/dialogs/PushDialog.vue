@@ -4,6 +4,7 @@ import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import ModalDialog from "../ui/ModalDialog.vue";
 import Icon from "../ui/Icon.vue";
+import Checkbox from "../ui/Checkbox.vue";
 import SelectMenu from "../ui/SelectMenu.vue";
 import type { SelectEntry } from "../ui/types";
 
@@ -68,15 +69,15 @@ async function submit() {
 				</label>
 			</div>
 			<label class="check">
-				<input v-model="setUpstream" type="checkbox" />
+				<Checkbox v-model="setUpstream" />
 				设置上游跟踪（-u）
 			</label>
 			<label class="check">
-				<input v-model="pushTags" type="checkbox" />
+				<Checkbox v-model="pushTags" />
 				同时推送所有标签（--tags）
 			</label>
 			<label class="check danger-check">
-				<input v-model="force" type="checkbox" />
+				<Checkbox v-model="force" />
 				强制推送（--force，会覆盖远程历史！）
 			</label>
 		</template>
@@ -123,10 +124,6 @@ input[type="text"] {
 }
 .danger-check {
 	color: var(--diff-del-text);
-}
-.check input {
-	accent-color: var(--accent);
-	cursor: pointer;
 }
 .warn {
 	display: flex;

@@ -459,6 +459,7 @@ function moveGroup(
 	font-size: 11.5px;
 	font-weight: 600;
 	user-select: none;
+	position: relative;
 }
 .group-head:hover {
 	background: var(--bg-hover);
@@ -475,6 +476,7 @@ function moveGroup(
 .group-head.drop-into {
 	background: var(--bg-selected);
 	color: var(--text-strong);
+	box-shadow: inset 0 0 0 1px var(--accent);
 }
 .chev,
 .group-icon {
@@ -503,6 +505,7 @@ function moveGroup(
 	border-radius: 6px;
 	cursor: pointer;
 	color: var(--text);
+	position: relative;
 }
 .repo-row.in-group {
 	padding-left: 20px;
@@ -546,10 +549,26 @@ function moveGroup(
 	font-size: 11.5px;
 	color: var(--text-faint);
 }
-.drop-before {
-	box-shadow: inset 0 2px 0 var(--accent);
+/* 拖拽插入位置：贯穿整行的平直细线（不使用 inset 阴影，避免被圆角“啃”出钝角） */
+.drop-before::before,
+.drop-after::after {
+	content: "";
+	position: absolute;
+	left: 2px;
+	right: 2px;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--accent);
+	pointer-events: none;
 }
-.drop-after {
-	box-shadow: inset 0 -2px 0 var(--accent);
+.drop-before::before {
+	top: -2px;
+}
+.drop-after::after {
+	bottom: -2px;
+}
+.drop-before::before,
+.drop-after::after {
+	box-shadow: 0 0 5px var(--accent-soft);
 }
 </style>

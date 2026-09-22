@@ -52,6 +52,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey, true));
 	align-items: flex-start;
 	justify-content: center;
 	padding-top: 14vh;
+	animation: modal-overlay-in 0.16s ease-out;
 }
 .modal-panel {
 	background: var(--bg-panel);
@@ -63,6 +64,18 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey, true));
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+	animation: modal-panel-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes modal-overlay-in {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes modal-panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(-10px) scale(0.97);
+	}
 }
 .modal-head {
 	flex: none;

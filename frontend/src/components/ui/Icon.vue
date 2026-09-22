@@ -5,6 +5,7 @@
 import { computed, type Component } from "vue";
 import {
 	Archive,
+	Bug,
 	Check,
 	Cherry,
 	ChevronDown,
@@ -46,6 +47,7 @@ const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
 });
 
 const map: Record<string, Component> = {
+	bug: Bug,
 	history: GitGraph,
 	file: FileText,
 	"file-plus": FilePlus,

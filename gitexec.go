@@ -7,8 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
+
+// gitDirCache memoizes `git rev-parse --absolute-git-dir` per repository path.
+var gitDirCache sync.Map
 
 // gitEnv is appended to every git invocation so output is stable and git never
 // blocks on interactive prompts (credentials, editors, pagers).
@@ -39,12 +43,30 @@ func runGitNetwork(repoPath string, args ...string) (string, error) {
 	return runGitCtx(ctx, repoPath, args...)
 }
 
+// runGitRO runs a read-only git command with GIT_OPTIONAL_LOCKS=0.
+//
+// 这很关键：`git status` / `git diff` 默认会“顺手”刷新 index 里的 stat 缓存，
+// 也就是会重写 .git/index。对一个会监听 .git 的客户端来说，这会造成自激循环：
+// 轮询 → 写 index → 监听事件 → 刷新 → 再写 index ……
+// 因此所有只是“看”的命令都必须关掉这类可选写入。
+func runGitRO(repoPath string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	return runGitCtxEnv(ctx, repoPath, []string{"GIT_OPTIONAL_LOCKS=0"}, args...)
+}
+
 func runGitCtx(ctx context.Context, repoPath string, args ...string) (string, error) {
+	return runGitCtxEnv(ctx, repoPath, nil, args...)
+}
+
+// runGitCtxEnv executes git with extra environment entries appended.
+func runGitCtxEnv(ctx context.Context, repoPath string, extraEnv []string, args ...string) (string, error) {
+	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	if repoPath != "" {
 		cmd.Dir = repoPath
 	}
-	cmd.Env = gitEnv()
+	cmd.Env = append(gitEnv(), extraEnv...)
 	cmd.WaitDelay = 5 * time.Second
 
 	var stdout, stderr bytes.Buffer
@@ -53,14 +75,28 @@ func runGitCtx(ctx context.Context, repoPath string, args ...string) (string, er
 
 	err := cmd.Run()
 	out := stdout.String()
+	entry := GitLogEntry{
+		Time:     start.UnixMilli(),
+		Kind:     "git",
+		Dir:      repoPath,
+		Command:  "git " + joinCommand(args...),
+		Duration: time.Since(start).Milliseconds(),
+		Output:   stdout.String() + stderr.String(),
+	}
 	if ctx.Err() == context.DeadlineExceeded {
+		entry.Error = "超时"
+		recordCommand(entry)
 		return out, errors.New("git 命令超时: git " + strings.Join(args, " "))
 	}
 	if err != nil {
 		msg := firstNonEmpty(strings.TrimSpace(stderr.String()), strings.TrimSpace(out), err.Error())
 		// git prints progress/info noise on stderr; keep only the first meaningful lines.
+		entry.Error = msg
+		recordCommand(entry)
 		return out, errors.New(msg)
 	}
+	entry.OK = true
+	recordCommand(entry)
 	return out, nil
 }
 
@@ -83,9 +119,19 @@ func splitLines(s string) []string {
 }
 
 // gitDir returns the absolute path of the .git directory for repoPath.
+// The result is cached: a repository's git dir cannot change during one
+// session, and this avoids an extra `git rev-parse` on every status poll.
 func gitDir(repoPath string) (string, error) {
+	if v, ok := gitDirCache.Load(repoPath); ok {
+		return v.(string), nil
+	}
 	out, err := runGit(repoPath, "rev-parse", "--absolute-git-dir")
-	return strings.TrimSpace(out), err
+	dir := strings.TrimSpace(out)
+	if err != nil || dir == "" {
+		return dir, err
+	}
+	gitDirCache.Store(repoPath, dir)
+	return dir, nil
 }
 
 // repoToplevel resolves the repository root for any path inside a work tree.

@@ -1,8 +1,8 @@
 // Typed access to the Go backend via the auto-generated Wails bindings.
 import { GitService, RepoService, AppService } from "../../bindings/gitview";
-import { Dialogs, Clipboard } from "@wailsio/runtime";
+import { Dialogs, Clipboard, Events } from "@wailsio/runtime";
 
-export { GitService, RepoService, AppService };
+export { GitService, RepoService, AppService, Events };
 
 export type {
 	BranchInfo,
@@ -13,6 +13,7 @@ export type {
 	CommitFile,
 	CommitOptions,
 	FileStatus,
+	GitLogEntry,
 	LogOptions,
 	MergeOptions,
 	PullOptions,
@@ -26,7 +27,18 @@ export type {
 	StashOptions,
 	TagInfo,
 	TagOptions,
+	WatchStatus,
 } from "../../bindings/gitview/models";
+
+/** 后端监听仓库变化时推送的事件名（见 gitView/watcher.go） */
+export const REPO_CHANGED_EVENT = "repo:changed";
+
+/** repo:changed 事件负载 */
+export interface RepoChange {
+	repoPath?: string;
+	/** "status"（工作区/index）| "refs"（分支/标签/stash）| "all" */
+	kind?: string;
+}
 
 /** Open a native directory picker. Resolves '' when cancelled. */
 export async function pickDirectory(

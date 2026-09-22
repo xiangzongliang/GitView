@@ -11,11 +11,29 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 /**
  * Author returns the application author.
  */
 export function Author(): $CancellablePromise<string> {
     return $Call.ByID(243095453);
+}
+
+/**
+ * ClearGitLog drops every recorded command log entry.
+ */
+export function ClearGitLog(): $CancellablePromise<void> {
+    return $Call.ByID(908878237);
+}
+
+/**
+ * GitLog returns the recorded command log entries newer than since.
+ */
+export function GitLog(since: number): $CancellablePromise<$models.GitLogEntry[] | null> {
+    return $Call.ByID(2576985120, since);
 }
 
 /**

@@ -15,6 +15,8 @@ import {
 	dirname,
 } from "../../utils/format";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
+import Checkbox from "../ui/Checkbox.vue";
 
 const repo = useRepo();
 const ui = useUI();
@@ -238,14 +240,13 @@ function fileMenu(e: MouseEvent, f: Row) {
 		<template v-else-if="rows.length > 0">
 			<!-- 全选表头：点整行或左侧勾选框切换全部；半选状态自动显示 -->
 			<div class="list-head" @click="toggleAll">
-				<input
-					type="checkbox"
+				<Checkbox
 					:checked="allStaged"
-					:indeterminate.prop="someStaged && !allStaged"
+					:indeterminate="someStaged && !allStaged"
 					:disabled="!!ui.opRunning"
 					title="全选 / 取消全选"
-					@click.prevent.stop="toggleAll"
-					@dblclick.stop
+					@toggle="toggleAll"
+					@click.stop
 				/>
 				<span class="head-label">更改文件</span>
 				<span class="head-count">{{ rows.length }}</span>
@@ -260,33 +261,38 @@ function fileMenu(e: MouseEvent, f: Row) {
 				@dblclick="toggleStage(f)"
 				@contextmenu="fileMenu($event, f)"
 			>
-				<input
-					class="row-check"
-					type="checkbox"
+				<Checkbox
 					:checked="f.staged"
-					:indeterminate.prop="f.partial"
+					:indeterminate="f.partial"
 					:disabled="!!ui.opRunning"
 					:title="
 						f.partial
 							? '部分暂存，点击全部纳入提交'
 							: '勾选纳入本次提交'
 					"
-					@click.prevent.stop="toggleStage(f)"
-					@dblclick.stop
+					@toggle="toggleStage(f)"
+					@click.stop
 				/>
 				<span
 					class="st"
 					:style="{ color: statusColor(f.st) }"
 					:title="STATUS_LABELS[f.st] || f.st"
 				>
-					<Icon :name="STATUS_ICONS[f.st] || 'file'" :size="13" />
+					<Spinner v-if="repo.isPending(f.path)" :size="11" />
+					<Icon
+						v-else
+						:name="STATUS_ICONS[f.st] || 'file'"
+						:size="12"
+					/>
 				</span>
 				<span class="fp">
 					<template v-if="f.renamed && f.oldPath">
 						<span class="dn old">{{ f.oldPath }}</span>
 						<span class="arrow">→</span>
 					</template>
-					<span class="bn">{{ basename(f.path) }}</span>
+					<span class="bn" :class="{ del: f.st === 'D' }">{{
+						basename(f.path)
+					}}</span>
 					<span v-if="dirname(f.path)" class="dn">{{
 						dirname(f.path)
 					}}</span>
@@ -337,13 +343,6 @@ function fileMenu(e: MouseEvent, f: Row) {
 	line-height: 14px;
 	color: var(--text-dim);
 }
-.list-head input,
-.row-check {
-	accent-color: var(--accent);
-	cursor: pointer;
-	flex: none;
-	margin: 0;
-}
 .file-row {
 	display: flex;
 	align-items: center;
@@ -360,7 +359,7 @@ function fileMenu(e: MouseEvent, f: Row) {
 }
 .st {
 	flex: none;
-	width: 15px;
+	width: 14px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -380,6 +379,11 @@ function fileMenu(e: MouseEvent, f: Row) {
 	max-width: 60%;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+/* 已删除的文件：文件名加中划线 */
+.bn.del {
+	text-decoration: line-through;
+	color: var(--text-dim);
 }
 .dn {
 	color: var(--text-faint);

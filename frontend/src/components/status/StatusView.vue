@@ -5,6 +5,8 @@ import { useUI } from "../../stores/ui";
 import FileList from "./FileList.vue";
 import DiffViewer from "../common/DiffViewer.vue";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
+import Checkbox from "../ui/Checkbox.vue";
 
 const repo = useRepo();
 const ui = useUI();
@@ -85,9 +87,8 @@ watch(
 				/>
 				<div class="form-row">
 					<label class="amend" title="修改最近一次提交（替换 HEAD）">
-						<input
+						<Checkbox
 							v-model="repo.amend"
-							type="checkbox"
 							:disabled="!repo.status?.head"
 						/>
 						Amend
@@ -98,13 +99,16 @@ watch(
 						:disabled="!canCommit"
 						@click="repo.doCommit()"
 					>
-						<Icon name="commit" :size="13" />
+						<Spinner v-if="ui.isOp('commit')" :size="13" />
+						<Icon v-else name="commit" :size="13" />
 						{{
-							merging
-								? "提交合并"
-								: repo.amend
-									? "Amend 提交"
-									: "提交"
+							ui.isOp("commit")
+								? "提交中…"
+								: merging
+									? "提交合并"
+									: repo.amend
+										? "Amend 提交"
+										: "提交"
 						}}
 					</button>
 				</div>
@@ -189,10 +193,6 @@ watch(
 	color: var(--text-dim);
 	cursor: pointer;
 	user-select: none;
-}
-.amend input {
-	accent-color: var(--accent);
-	cursor: pointer;
 }
 .spacer {
 	flex: 1;
