@@ -1,8 +1,13 @@
 // Typed access to the Go backend via the auto-generated Wails bindings.
-import { GitService, RepoService, AppService } from "../../bindings/gitview";
+import {
+	GitService,
+	RepoService,
+	AppService,
+	UpdateService,
+} from "../../bindings/gitview";
 import { Dialogs, Clipboard, Events } from "@wailsio/runtime";
 
-export { GitService, RepoService, AppService, Events };
+export { GitService, RepoService, AppService, UpdateService, Events };
 
 export type {
 	BranchInfo,
@@ -28,6 +33,7 @@ export type {
 	StashOptions,
 	TagInfo,
 	TagOptions,
+	UpdateCheckResult,
 	WatchStatus,
 } from "../../bindings/gitview/models";
 

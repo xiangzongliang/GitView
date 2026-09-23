@@ -325,7 +325,11 @@ const refFilterIcon = computed(() => {
 	background: var(--bg-selected);
 }
 .ref-select {
-	max-width: 170px;
+	max-width: 220px;
+}
+/* 分支选择器设置最小宽度：短分支名（如 main）也不会塌成一个小按钮 */
+.ref-select :deep(.sm-trigger) {
+	min-width: 170px;
 }
 .search-box {
 	position: relative;

@@ -11,6 +11,8 @@ import (
 var assets embed.FS
 
 func main() {
+	updateService := NewUpdateService()
+
 	app := application.New(application.Options{
 		Name:        "Git View",
 		Description: "Git View - a modern Git desktop client built with Wails v3",
@@ -18,6 +20,7 @@ func main() {
 			application.NewService(&GitService{}),
 			application.NewService(&RepoService{}),
 			application.NewService(&AppService{}),
+			application.NewService(updateService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -43,6 +46,12 @@ func main() {
 		Windows:        application.WindowsWindow{},
 		URL:            "/",
 	})
+
+	// 初始化自更新能力（app 创建后 app.Updater 才可用）。
+	// 失败只记录日志，不阻塞启动，也不影响应用使用。
+	if err := updateService.configure(app.Updater); err != nil {
+		log.Printf("[updater] 初始化失败：%v", err)
+	}
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

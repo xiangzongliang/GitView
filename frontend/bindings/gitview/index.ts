@@ -4,10 +4,12 @@
 import * as AppService from "./appservice.js";
 import * as GitService from "./gitservice.js";
 import * as RepoService from "./reposervice.js";
+import * as UpdateService from "./updateservice.js";
 export {
     AppService,
     GitService,
-    RepoService
+    RepoService,
+    UpdateService
 };
 
 export type {
@@ -34,5 +36,6 @@ export type {
     StashOptions,
     TagInfo,
     TagOptions,
+    UpdateCheckResult,
     WatchStatus
 } from "./models.js";

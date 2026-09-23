@@ -135,16 +135,19 @@ const isEmpty = computed(
 							class="diff-row"
 							:class="l.kind"
 						>
-							<span class="ln">{{ l.oldNo || "" }}</span>
-							<span class="ln">{{ l.newNo || "" }}</span>
+							<span class="ln" :data-no="l.oldNo || ''" />
+							<span class="ln" :data-no="l.newNo || ''" />
 							<span class="code">
-								<span class="mark">{{
-									l.kind === "add"
-										? "+"
-										: l.kind === "del"
-											? "−"
-											: " "
-								}}</span>
+								<span
+									class="mark"
+									:data-mark="
+										l.kind === 'add'
+											? '+'
+											: l.kind === 'del'
+												? '−'
+												: ' '
+									"
+								/>
 								<span v-if="l.html" v-html="l.html" />
 							</span>
 						</div>
@@ -217,6 +220,10 @@ const isEmpty = computed(
 	user-select: none;
 	white-space: nowrap;
 }
+/* 行号用 CSS 生成内容渲染：伪元素不参与选区，也不会被复制 */
+.ln::before {
+	content: attr(data-no);
+}
 .code {
 	padding: 0 10px;
 	white-space: pre-wrap;
@@ -228,6 +235,10 @@ const isEmpty = computed(
 	display: inline-block;
 	width: 12px;
 	user-select: none;
+}
+/* +/− 标记同样用伪元素生成，复制时不带上前缀 */
+.mark::before {
+	content: attr(data-mark);
 }
 .diff-row.add {
 	background: var(--diff-add-bg);

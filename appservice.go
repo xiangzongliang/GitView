@@ -7,10 +7,17 @@ import "strings"
 type AppService struct{}
 
 // appVersion mirrors build/config.yml -> info.version.
-const appVersion = "0.0.1"
+//
+// It is a var (not a const) so release builds can inject the real version:
+//
+//	-ldflags "-X main.appVersion=x.y.z"
+//
+// The same value is reported to the update manifest, so it must match the
+// release tag exactly (no "v" prefix).
+var appVersion = "0.1.2"
 
 // appAuthor is the author shown in the About section.
-const appAuthor = "xiangzl"
+const appAuthor = "xiangzongliang"
 
 // Version returns the application version string.
 func (s *AppService) Version() string {

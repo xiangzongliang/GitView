@@ -396,6 +396,19 @@ export interface TagOptions {
 }
 
 /**
+ * UpdateCheckResult 是「检查更新」返回给前端的结果。
+ * 字段名 / JSON tag 与前端 SettingsPanel 的「关于」页保持一致。
+ */
+export interface UpdateCheckResult {
+    "updateAvailable": boolean;
+    "currentVersion": string;
+    "latestVersion": string;
+    "name": string;
+    "notes": string;
+    "publishedAt": string;
+}
+
+/**
  * WatchStatus describes the current watcher state (shown in the debug window).
  */
 export interface WatchStatus {

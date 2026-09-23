@@ -94,7 +94,10 @@ function click(action?: () => void) {
 .ctx-menu {
 	position: fixed;
 	z-index: 1100;
-	min-width: 230px;
+	/* 宽度随内容自适应：菜单至少 250px，长文案按最长一项撑开，
+	   避免出现被截断或换行的观感；超过视口时再回落换行。 */
+	width: max-content;
+	min-width: 250px;
 	max-width: min(420px, calc(100vw - 16px));
 	background: var(--menu-bg);
 	border: 1px solid var(--border-strong);

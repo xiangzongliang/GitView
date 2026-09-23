@@ -45,7 +45,7 @@ function menu(e: MouseEvent) {
 	const hash = c.hash;
 	const items: MenuItem[] = [
 		{
-			label: "检出此提交（分离头指针）…",
+			label: "检出此提交（分离头指针）",
 			icon: "check",
 			action: async () => {
 				const ok = await ui.confirm({
@@ -60,12 +60,12 @@ function menu(e: MouseEvent) {
 			},
 		},
 		{
-			label: "从此提交新建分支…",
+			label: "从此提交新建分支",
 			icon: "plus",
 			action: () => ui.openDialog("branch", { start: hash }),
 		},
 		{
-			label: "在此提交新建标签…",
+			label: "在此提交新建标签",
 			icon: "tag",
 			action: () => ui.openDialog("tag", { target: hash }),
 		},
@@ -81,7 +81,7 @@ function menu(e: MouseEvent) {
 			action: () => repo.revertCommit(hash),
 		},
 		{
-			label: "Reset 当前分支到此处…",
+			label: "Reset 当前分支到此处",
 			icon: "reset",
 			danger: true,
 			action: () => ui.openDialog("reset", { target: hash }),
