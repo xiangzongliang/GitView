@@ -20,6 +20,7 @@ export type {
     CommitOptions,
     FileStatus,
     GitLogEntry,
+    GroupInfo,
     LogOptions,
     MergeOptions,
     PullOptions,

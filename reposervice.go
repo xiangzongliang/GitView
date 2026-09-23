@@ -22,7 +22,8 @@ type RepoService struct {
 }
 
 type appConfig struct {
-	Repos []RepoEntry `json:"repos"`
+	Repos  []RepoEntry `json:"repos"`
+	Groups []GroupInfo `json:"groups,omitempty"`
 }
 
 func configFilePath() (string, error) {
@@ -84,9 +85,23 @@ func (s *RepoService) ListRepos() ([]RepoEntry, error) {
 	return cfg.Repos, nil
 }
 
-// SaveLayout persists the repository order and group assignments exactly as
-// provided by the frontend (drag & drop result).
-func (s *RepoService) SaveLayout(entries []RepoEntry) error {
+// ListGroups returns persisted groups in display order (empty groups included).
+func (s *RepoService) ListGroups() ([]GroupInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Groups == nil {
+		return []GroupInfo{}, nil
+	}
+	return cfg.Groups, nil
+}
+
+// SaveLayout persists the repository order/group assignments and the group
+// list (order + collapsed state) exactly as provided by the frontend.
+func (s *RepoService) SaveLayout(entries []RepoEntry, groups []GroupInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cfg, err := s.load()
@@ -118,6 +133,17 @@ func (s *RepoService) SaveLayout(entries []RepoEntry) error {
 		}
 	}
 	cfg.Repos = out
+	// Group list: dedupe, drop the ungrouped placeholder ("").
+	cleaned := make([]GroupInfo, 0, len(groups))
+	seenGroup := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		if g.Name == "" || seenGroup[g.Name] {
+			continue
+		}
+		seenGroup[g.Name] = true
+		cleaned = append(cleaned, g)
+	}
+	cfg.Groups = cleaned
 	return s.save(cfg)
 }
 

@@ -191,6 +191,16 @@ export interface GitLogEntry {
 }
 
 /**
+ * GroupInfo is a repository group's persisted metadata. The slice order in the
+ * config file is the display order; empty groups are kept so they survive a
+ * restart until the user dissolves them.
+ */
+export interface GroupInfo {
+    "name": string;
+    "collapsed": boolean;
+}
+
+/**
  * LogOptions controls a paginated git log query.
  */
 export interface LogOptions {

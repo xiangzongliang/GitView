@@ -21,8 +21,10 @@ import (
 //     避免在 macOS(kqueue) 上耗尽文件描述符、在 Linux 上耗尽 inotify watch。
 //   - 事件抖动：*.lock、reflog 一律忽略；事件先做尾部去抖（debounce），
 //     再受最小间隔节流（minGap），避免 commit/checkout 一类操作引发连环刷新。
-//   - 自身命令触发的事件不做屏蔽：`git status` 只在工作区确实变化时才重写
-//     index，配合最小间隔即可自终止，屏蔽反而会漏掉外部改动。
+//   - 纯属性事件（fsnotify.Chmod）一律丢弃：macOS(kqueue) 下“读取文件更新
+//     atime”“chmod/chown”都会上报 NOTE_ATTRIB→Chmod，而 `git status` 读 index
+//     就会触发。它不代表仓库内容变化，若上报会与自身命令形成自激刷新。
+//     内容变化一定带 Write/Create/Remove/Rename，丢弃 Chmod 不会漏掉真实改动。
 const (
 	repoChangedEvent = "repo:changed"
 
@@ -212,14 +214,17 @@ func (w *repoWatcher) loop() {
 }
 
 func (w *repoWatcher) handle(ev fsnotify.Event) {
+	// 纯属性事件（Chmod）：macOS(kqueue) 读取文件更新 atime、chmod/chown 都会
+	// 上报 NOTE_ATTRIB，而 `git status` 读 index 就会触发。它不代表仓库内容变化，
+	// 若上报会与自身命令形成自激刷新，因此直接丢弃（只计数，供调试溯源）。
+	if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+		w.countIgnored()
+		return
+	}
 	kind := w.classify(ev.Name)
 	if kind == "" {
 		// .lock / reflog 等噪声：只计数，不触发刷新
-		w.mu.Lock()
-		if !w.stopped {
-			w.ignored++
-		}
-		w.mu.Unlock()
+		w.countIgnored()
 		return
 	}
 	w.mu.Lock()
@@ -256,6 +261,15 @@ func (w *repoWatcher) handle(ev fsnotify.Event) {
 	if ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) != 0 {
 		w.syncWatches()
 	}
+}
+
+// countIgnored records a noise event that must not trigger a refresh.
+func (w *repoWatcher) countIgnored() {
+	w.mu.Lock()
+	if !w.stopped {
+		w.ignored++
+	}
+	w.mu.Unlock()
 }
 
 // classify maps a changed path to a refresh kind ("" = ignore).
@@ -356,7 +370,7 @@ func logWatchPush(kind string, paths []string, ignored int) {
 	}
 	out := "触发路径：" + strings.Join(paths, "\n")
 	if ignored > 0 {
-		out += fmt.Sprintf("\n（已忽略噪声事件 %d 个：.lock / reflog 等）", ignored)
+		out += fmt.Sprintf("\n（已忽略噪声事件 %d 个：.lock / reflog / 纯属性变化等）", ignored)
 	}
 	logWatchEvent("repo:changed  kind="+kind+trigger, out, true)
 }

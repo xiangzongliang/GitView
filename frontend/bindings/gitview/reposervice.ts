@@ -30,6 +30,13 @@ export function Init(dir: string): $CancellablePromise<$models.RepoEntry | null>
 }
 
 /**
+ * ListGroups returns persisted groups in display order (empty groups included).
+ */
+export function ListGroups(): $CancellablePromise<$models.GroupInfo[] | null> {
+    return $Call.ByID(112148621);
+}
+
+/**
  * ListRepos returns all registered repositories in stored order.
  * The order is user-managed (drag & drop) and persisted via SaveLayout.
  */
@@ -67,9 +74,9 @@ export function RevealInFinder(path: string): $CancellablePromise<void> {
 }
 
 /**
- * SaveLayout persists the repository order and group assignments exactly as
- * provided by the frontend (drag & drop result).
+ * SaveLayout persists the repository order/group assignments and the group
+ * list (order + collapsed state) exactly as provided by the frontend.
  */
-export function SaveLayout(entries: $models.RepoEntry[] | null): $CancellablePromise<void> {
-    return $Call.ByID(2693767170, entries);
+export function SaveLayout(entries: $models.RepoEntry[] | null, groups: $models.GroupInfo[] | null): $CancellablePromise<void> {
+    return $Call.ByID(2693767170, entries, groups);
 }

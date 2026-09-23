@@ -18,7 +18,7 @@ interface GroupView {
 }
 
 const groupsView = computed<GroupView[]>(() => {
-	const gs = repos.groups;
+	const gs = repos.groupsView;
 	const hasNamed = gs.some((g) => g.name !== "");
 	return gs.map((g) => ({ ...g, hasHeader: g.name !== "" || hasNamed }));
 });
@@ -170,8 +170,8 @@ function onRepoDragStart(e: DragEvent, path: string) {
 }
 
 function onGroupDragStart(e: DragEvent, name: string) {
-	// 未分组头不可拖；空分组没有可移动的块，也不拖
-	if (!name || !repos.groups.find((g) => g.name === name)?.entries.length) {
+	// 未分组头不可拖（它始终固定在最后）
+	if (!name) {
 		e.preventDefault();
 		return;
 	}
@@ -247,8 +247,8 @@ function onGroupHeadDrop(e: DragEvent, name: string) {
 			}
 		} else if (d.name !== name) {
 			const pos = name === "" ? "before" : t.pos || "before";
-			repos.applyLayout(
-				moveGroup(repos.entries, d.name, name, pos === "before"),
+			repos.applyGroupOrder(
+				moveGroupName(repos.groupNames, d.name, name, pos === "before"),
 			);
 		}
 	}
@@ -301,28 +301,19 @@ function moveRepoRelativeTo(
 	return rest;
 }
 
-function moveGroup(
-	entries: RepoEntry[],
+function moveGroupName(
+	names: string[],
 	from: string,
 	to: string,
 	before: boolean,
-): RepoEntry[] {
-	if (from === to) return entries;
-	const block = entries.filter((r) => groupOf(r) === from);
-	if (!block.length) return entries;
-	const rest = entries.filter((r) => groupOf(r) !== from);
-	const t = rest.findIndex((r) => groupOf(r) === to);
-	if (t === -1) return entries;
-	let insertAt = before ? t : rest.length;
-	if (!before) {
-		for (let i = t; i < rest.length; i++) {
-			if (groupOf(rest[i]) !== to) {
-				insertAt = i;
-				break;
-			}
-		}
-	}
-	return [...rest.slice(0, insertAt), ...block, ...rest.slice(insertAt)];
+): string[] {
+	if (from === to) return names;
+	const rest = names.filter((n) => n !== from);
+	const t = rest.indexOf(to);
+	// 目标不在已登记分组中（例如未分组 ""）：移到末尾
+	if (t === -1) return [...rest, from];
+	rest.splice(before ? t : t + 1, 0, from);
+	return rest;
 }
 </script>
 
@@ -508,7 +499,8 @@ function moveGroup(
 	position: relative;
 }
 .repo-row.in-group {
-	padding-left: 20px;
+	/* 组内仓库：图标与分组标题的文件夹图标对齐（缩进一个 chevron 列宽），形成清晰的层级关系 */
+	padding-left: 26px;
 }
 .repo-row:hover {
 	background: var(--bg-hover);

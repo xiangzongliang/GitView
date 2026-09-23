@@ -9,6 +9,14 @@ type RepoEntry struct {
 	Missing    bool   `json:"missing"` // path no longer exists on disk
 }
 
+// GroupInfo is a repository group's persisted metadata. The slice order in the
+// config file is the display order; empty groups are kept so they survive a
+// restart until the user dissolves them.
+type GroupInfo struct {
+	Name      string `json:"name"`
+	Collapsed bool   `json:"collapsed"`
+}
+
 // FileStatus describes one changed file in the index or worktree.
 type FileStatus struct {
 	Path       string `json:"path"`

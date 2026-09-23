@@ -143,6 +143,21 @@ function shortDir(dir: string): string {
 	const parts = dir.split("/").filter(Boolean);
 	return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : dir;
 }
+
+/**
+ * 每类条目的标记：区分“执行的命令”和“响应的日志”。
+ * git 命令 `$` / 终端 `❯` 是“执行”；监听事件 `◆` 是后端推送的“日志”。
+ */
+function kindMeta(e: GitLogEntry): { glyph: string; cls: string; label: string } {
+	switch (e.kind) {
+		case "shell":
+			return { glyph: "❯", cls: "k-shell", label: "终端命令" };
+		case "watch":
+			return { glyph: "◆", cls: "k-watch", label: "监听事件" };
+		default:
+			return { glyph: "$", cls: "k-git", label: "git 命令" };
+	}
+}
 </script>
 
 <template>
@@ -162,10 +177,10 @@ function shortDir(dir: string): string {
 				:class="{ off: !watchInfo.watching, err: !!watchInfo.error }"
 				:title="
 					watchInfo.error
-						? '文件监听不可用，已退回定时轮询：' + watchInfo.error
+						? '文件监听不可用：' + watchInfo.error
 						: watchInfo.watching
 							? `fsnotify 监听中（${watchInfo.paths} 个路径），仓库变化会立即推送`
-							: '当前未监听（使用定时轮询）'
+							: '当前未监听（可手动刷新）'
 				"
 			>
 				<Icon name="refresh" :size="10" />
@@ -217,39 +232,44 @@ function shortDir(dir: string): string {
 				:class="{ err: !e.ok, open: expanded.has(e.seq) }"
 			>
 				<div class="dbg-line" @click="toggle(e.seq)">
-					<span class="dbg-dot" />
+					<span
+						class="dbg-mark mono"
+						:class="[kindMeta(e).cls, { err: !e.ok }]"
+						:title="kindMeta(e).label"
+						>{{ kindMeta(e).glyph }}</span
+					>
 					<span class="dbg-time mono">{{ fmtTime(e.time) }}</span>
 					<span v-if="e.duration > 0" class="dbg-dur mono"
 						>{{ e.duration }}ms</span
 					>
-					<Icon
-						:name="
-							e.kind === 'shell'
-								? 'terminal'
-								: e.kind === 'watch'
-									? 'refresh'
-									: 'commit'
-						"
-						:size="10"
-						class="dbg-kind"
-					/>
-					<code class="dbg-cmd mono">{{ e.command }}</code>
+					<code
+						class="dbg-cmd mono"
+						:class="{ clamp: !expanded.has(e.seq) }"
+						:title="e.command"
+						>{{ e.command }}</code
+					>
 					<button
 						class="btn-icon dbg-copy"
-						title="复制命令"
+						title="复制"
 						@click.stop="copyText(e.command)"
 					>
 						<Icon name="copy" :size="11" />
 					</button>
 				</div>
-				<div v-if="e.error" class="dbg-err mono">{{ e.error }}</div>
+				<div v-if="e.error" class="dbg-resp">
+					<span class="dbg-resp-tag mono err">✕ 错误</span>
+					<pre class="dbg-err mono">{{ e.error }}</pre>
+				</div>
 				<div v-if="expanded.has(e.seq)" class="dbg-meta mono">
+					<span class="dbg-meta-tag">⌂</span>
 					{{ shortDir(e.dir) || "（无工作目录）" }}
 				</div>
-				<pre
-					v-if="expanded.has(e.seq) && e.output"
-					class="dbg-out mono"
-					>{{ e.output }}</pre>
+				<div v-if="expanded.has(e.seq) && e.output" class="dbg-resp">
+					<span class="dbg-resp-tag mono"
+						>↳ {{ e.kind === "watch" ? "详情" : "输出" }}</span
+					>
+					<pre class="dbg-out mono">{{ e.output }}</pre>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -283,7 +303,7 @@ function shortDir(dir: string): string {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	height: 32px;
+	height: 30px;
 	padding: 0 8px 0 12px;
 	border-bottom: 1px solid var(--border);
 	background: var(--bg-panel-2);
@@ -292,12 +312,12 @@ function shortDir(dir: string): string {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 11.5px;
+	font-size: 11px;
 	font-weight: 600;
 	color: var(--text-strong);
 }
 .dbg-count {
-	font-size: 10px;
+	font-size: 9.5px;
 	line-height: 14px;
 	padding: 0 5px;
 	border-radius: 7px;
@@ -312,7 +332,7 @@ function shortDir(dir: string): string {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	font-size: 10px;
+	font-size: 9.5px;
 	line-height: 14px;
 	padding: 0 6px;
 	border-radius: 7px;
@@ -336,7 +356,7 @@ function shortDir(dir: string): string {
 	height: 20px;
 	padding: 0 7px;
 	border-radius: 5px;
-	font-size: 11px;
+	font-size: 10.5px;
 	color: var(--text-dim);
 }
 .dbg-btn:hover:not(:disabled) {
@@ -351,7 +371,7 @@ function shortDir(dir: string): string {
 	min-height: 0;
 	overflow-y: auto;
 	padding: 4px 0;
-	font-size: 11.5px;
+	font-size: 11px;
 }
 .dbg-empty {
 	padding: 18px 14px;
@@ -378,40 +398,57 @@ function shortDir(dir: string): string {
 	gap: 7px;
 	cursor: pointer;
 }
-.dbg-dot {
+/* 标记：区分“执行的命令”（$ / ❯）与“后端推送的日志”（◆） */
+.dbg-mark {
 	flex: none;
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-	background: var(--green);
-	align-self: center;
+	width: 12px;
+	text-align: center;
+	align-self: baseline;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1;
 }
-.dbg-row.err .dbg-dot {
-	background: var(--red);
+.dbg-mark.k-git {
+	color: var(--accent);
+}
+.dbg-mark.k-shell {
+	color: var(--green);
+}
+.dbg-mark.k-watch {
+	color: var(--purple);
+}
+.dbg-mark.err {
+	color: var(--red);
 }
 .dbg-time {
 	flex: none;
 	color: var(--text-faint);
-	font-size: 10.5px;
+	font-size: 10px;
 }
 .dbg-dur {
 	flex: none;
-	min-width: 42px;
+	min-width: 40px;
 	text-align: right;
 	color: var(--text-faint);
-	font-size: 10.5px;
-}
-.dbg-kind {
-	flex: none;
-	color: var(--text-faint);
-	align-self: center;
+	font-size: 10px;
 }
 .dbg-cmd {
 	flex: 1;
 	min-width: 0;
 	color: var(--text-strong);
-	word-break: break-all;
 	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+/* 折叠时单行省略：长命令不再把列表撑高，展开后再看全 */
+.dbg-cmd.clamp {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* 展开时换行用悬挂缩进：续行缩进，和首行区分开 */
+.dbg-cmd:not(.clamp) {
+	padding-left: 12px;
+	text-indent: -12px;
 }
 .dbg-row.err .dbg-cmd {
 	color: var(--red);
@@ -426,30 +463,57 @@ function shortDir(dir: string): string {
 .dbg-line:hover .dbg-copy {
 	opacity: 1;
 }
-.dbg-err {
-	margin: 2px 0 2px 13px;
-	color: var(--red);
-	font-size: 11px;
-	white-space: pre-wrap;
-	word-break: break-all;
+/* 响应区：命令输出 / 错误 / 事件详情，统一用左侧竖线 + 小标签区分 */
+.dbg-resp {
+	margin: 3px 0 3px 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
 }
-.dbg-meta {
-	margin: 2px 0 1px 13px;
+.dbg-resp-tag {
+	font-size: 9.5px;
 	color: var(--text-faint);
-	font-size: 10.5px;
-	word-break: break-all;
+}
+.dbg-resp-tag.err {
+	color: var(--red);
 }
 .dbg-out {
-	margin: 2px 0 4px 13px;
-	padding: 6px 8px;
+	margin: 0;
+	padding: 5px 8px 5px 20px;
+	/* 悬挂缩进：首行靠左，续行缩进 12px，换行后的内容更易读 */
+	text-indent: -12px;
 	max-height: 180px;
 	overflow: auto;
 	border-radius: 5px;
+	border-left: 2px solid var(--border-strong);
 	background: var(--term-bg);
 	color: var(--text);
-	font-size: 11px;
-	line-height: 1.5;
+	font-size: 10.5px;
+	line-height: 1.55;
 	white-space: pre-wrap;
-	word-break: break-all;
+	overflow-wrap: anywhere;
+	tab-size: 4;
+}
+.dbg-err {
+	margin: 0;
+	padding: 5px 7px;
+	border-radius: 5px;
+	border-left: 2px solid var(--red);
+	background: var(--red-wash);
+	color: var(--red);
+	font-size: 10.5px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.dbg-meta {
+	margin: 2px 0 1px 18px;
+	color: var(--text-faint);
+	font-size: 10px;
+	overflow-wrap: anywhere;
+}
+.dbg-meta-tag {
+	margin-right: 4px;
 }
 </style>

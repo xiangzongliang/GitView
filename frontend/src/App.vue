@@ -32,27 +32,8 @@ onMounted(() => {
 	repos.load();
 });
 
-// 仓库变化：正常由后端 fsnotify 推送 repo:changed 事件立即刷新，
-// 下面的轮询仅作为兵底（工作区内的文件改动不会触碰 .git，监听看不到）。
-const POLL_MS = 20000;
-const REFS_EVERY = 3; // 每 3 个 tick（≈60s）兜底刷新分支/标签/stash
-let pollTimer: number | undefined;
-let pollTick = 0;
-onMounted(() => {
-	pollTimer = window.setInterval(() => {
-		if (document.hidden || ui.busy || !repos.activePath || ui.dialog)
-			return;
-		pollTick++;
-		repo.refreshStatus();
-		if (pollTick % REFS_EVERY === 0) {
-			repo.refreshRefs();
-			repo.refreshStashes();
-		}
-	}, POLL_MS);
-});
-onBeforeUnmount(() => {
-	if (pollTimer) window.clearInterval(pollTimer);
-});
+// 仓库变化全部由后端 fsnotify 推送的 repo:changed 事件驱动（见 watcher.go），
+// 这里不再做后台轮询：git 命令只在用户操作、监听事件或窗口重新可见时执行。
 
 // 后端监听到仓库变化 → 按变更类型刷新对应数据（kind: status / refs / all）
 function applyRepoChange(kind: string) {

@@ -1,13 +1,19 @@
 # 仓库变化监听（fsnotify）设计说明
 
-前端刷新仓库状态有两种途径：
+前端刷新仓库状态是**事件驱动**的：后端用 fsnotify 监听活动仓库的 `.git`，变化时
+通过 `repo:changed` 事件（`application.Event.Emit`）推给前端，前端按 `kind`
+刷新对应数据。响应是即时的（去抖后约 300ms）。
 
-1. **事件驱动（主）**：后端用 fsnotify 监听活动仓库的 `.git`，变化时通过
-   `repo:changed` 事件（`application.Event.Emit`）推给前端，前端按 `kind`
-   刷新对应数据。响应是即时的（去抖后约 300ms）。
-2. **兜底轮询（备）**：前端保留低频轮询（`App.vue` 中 `POLL_MS = 20000`，
-   每 3 个 tick 兜底刷新 refs/stash）。工作区里的文件改动**不会触碰 `.git`**，
-   监听看不到，靠它覆盖；监听不可用（见下）时也由它保证功能不退化。
+除此之外**不做后台轮询**：git 命令只在下面几种情况下执行——
+
+- 用户操作（暂存/提交/切换分支等）完成后由 `refreshAll()/refreshStatus()` 主动刷新；
+- 收到 `repo:changed` 事件；
+- 窗口重新可见（`visibilitychange`）时补一次 `all` 刷新，用来覆盖
+  **工作区文件改动**（这类改动不触碰 `.git`，fsnotify 看不到）；
+- 用户点工具栏的“刷新”按钮（`refreshAll()`）。
+
+> 取舍：工作区里编辑文件不会自动刷新，需要切回窗口或手动刷新；换来的是
+> 空闲时完全不跑 git 命令，调试窗口也不再持续刷屏。
 
 ## 监听范围（刻意保持很小）
 
@@ -29,6 +35,9 @@
 ## 事件抖动处理
 
 - **忽略噪声**：`*.lock`、`.git/logs/*`（reflog）不参与分类。
+- **忽略纯属性事件**：`fsnotify.Chmod`（不带 Write/Create/Remove/Rename）一律丢弃。
+  macOS(kqueue) 下“读取文件更新 atime”“chmod/chown”都会上报 `NOTE_ATTRIB→Chmod`，
+  而 `git status` 读 index 就会触发；它不代表内容变化，上报就会与自身命令自激。
 - **尾部去抖**：每个事件重置 300ms 定时器，一次 `commit`/`checkout` 引发的一串
   写入（index、refs、HEAD）合并成一次推送。
 - **最长等待 1.2s**：持续抖动时不能被尾部去抖“饿死”（否则突发期间一次都不推），
@@ -62,6 +71,10 @@
   `runGitRO()`（即 `GIT_OPTIONAL_LOCKS=0`），不再产生 index 写入；
 - 前端 `refreshStatus()` 做并发合并（在途时只记一个尾随标记），防止刷新堆叠。
 
+即便不写 index，`git status` **读取** index 仍会在 macOS 上产生 `index [CHMOD]`
+属性事件，所以监听侧另外把纯 `Chmod` 事件丢弃（见上“忽略纯属性事件”），
+双保险彻底断开闭环。
+
 需要提醒的是：如果**外部**进程（例如 `wails dev`/`vite` 重建被跟踪的产物、日志文件持续写入）
 真的在持续修改仓库，事件推送本身就是正确的（仓库确实在变），此时由风暴保护把频率
 封在 3s 一次。
@@ -70,11 +83,11 @@
 
 `kind` 取值与前端动作（`App.vue: applyRepoChange`）：
 
-| kind | 含义 | 前端刷新 |
-|---|---|---|
-| `status` | index / 中断标记（`.git` 目录级变化） | `refreshStatus()` |
-| `refs` | `refs/**`、`HEAD`、`packed-refs` | `refreshStatus()` + `refreshRefs()` + `refreshStashes()` |
-| `all` | 同一去抖窗口内两者都有 | 同上（超集） |
+| kind     | 含义                                  | 前端刷新                                                 |
+| -------- | ------------------------------------- | -------------------------------------------------------- |
+| `status` | index / 中断标记（`.git` 目录级变化） | `refreshStatus()`                                        |
+| `refs`   | `refs/**`、`HEAD`、`packed-refs`      | `refreshStatus()` + `refreshRefs()` + `refreshStashes()` |
+| `all`    | 同一去抖窗口内两者都有                | 同上（超集）                                             |
 
 窗口不可见、有操作执行中（`ui.busy`）、弹窗打开时不处理事件，回到前台时由
 `visibilitychange` 统一补一次 `all` 刷新。
@@ -98,8 +111,10 @@
 
 ## 已知取舍
 
+- 工作区文件改动不触碰 `.git`，fsnotify 看不到；已取消后台轮询，改为在窗口重新
+  可见（`visibilitychange`）或手动点“刷新”时补刷。
 - macOS(kqueue) 下目录级监听只报告"条目增删改"，**已存在 ref 文件的内容改写**
   不一定上报；因此额外单独监听"当前分支的 ref 文件"，切分支时会随 `HEAD` 事件重新对齐。
 - Windows(ReadDirectoryChangesW) 缓冲区溢出会丢事件（fsnotify 通过 `Errors`
-  通道上报，代码中忽略该错误），由兜底轮询补上。
-- 监听启动失败只在调试窗口显示"监听失败"并给出原因，功能自动退回轮询。
+  通道上报，代码中忽略该错误），由窗口可见/手动刷新补上。
+- 监听启动失败只在调试窗口显示"监听失败"并给出原因。
