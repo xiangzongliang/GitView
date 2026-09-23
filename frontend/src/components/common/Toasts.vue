@@ -28,7 +28,8 @@ const icons: Record<string, string> = { success: 'check', error: 'alert', info: 
   position: fixed;
   right: 16px;
   bottom: 36px;
-  z-index: 1000;
+  /* 需高于设置抽屉（z-index: 1200），否则提示会被遮挡 */
+  z-index: 1300;
   display: flex;
   flex-direction: column;
   gap: 8px;

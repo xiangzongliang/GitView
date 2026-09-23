@@ -22,8 +22,9 @@ type RepoService struct {
 }
 
 type appConfig struct {
-	Repos  []RepoEntry `json:"repos"`
-	Groups []GroupInfo `json:"groups,omitempty"`
+	Repos       []RepoEntry  `json:"repos"`
+	Groups      []GroupInfo  `json:"groups,omitempty"`
+	AiProviders []AiProvider `json:"aiProviders,omitempty"`
 }
 
 func configFilePath() (string, error) {
@@ -370,4 +371,35 @@ func nameFromURL(url string) string {
 		u = u[i+1:]
 	}
 	return strings.TrimSuffix(u, ".git")
+}
+
+// ListAiProviders returns the AI model service configurations stored in the
+// app config file, in stored order.
+func (s *RepoService) ListAiProviders() ([]AiProvider, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.AiProviders == nil {
+		return []AiProvider{}, nil
+	}
+	return cfg.AiProviders, nil
+}
+
+// SaveAiProviders replaces the stored AI model service configurations with
+// the provided list (saved exactly as given by the frontend).
+func (s *RepoService) SaveAiProviders(providers []AiProvider) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.load()
+	if err != nil {
+		return err
+	}
+	if providers == nil {
+		providers = []AiProvider{}
+	}
+	cfg.AiProviders = providers
+	return s.save(cfg)
 }

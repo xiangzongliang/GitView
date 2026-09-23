@@ -37,6 +37,7 @@ import {
 	RotateCcw,
 	Search,
 	Settings,
+	Sparkles,
 	Sun,
 	Tag,
 	Terminal,
@@ -95,6 +96,7 @@ const map: Record<string, Component> = {
 	sun: Sun,
 	moon: Moon,
 	palette: Palette,
+	sparkles: Sparkles,
 };
 
 const icon = computed<Component>(() => map[props.name] || Info);

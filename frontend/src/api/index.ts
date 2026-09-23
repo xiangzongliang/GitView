@@ -10,6 +10,7 @@ import { Dialogs, Clipboard, Events } from "@wailsio/runtime";
 export { GitService, RepoService, AppService, UpdateService, Events };
 
 export type {
+	AiProvider,
 	BranchInfo,
 	BranchOptions,
 	CloneOptions,

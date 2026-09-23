@@ -16,7 +16,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -26,7 +26,9 @@ import * as $models from "./models.js";
  * CheckForUpdates 手动 / 自动检查是否有新版本，不会下载。
  */
 export function CheckForUpdates(): $CancellablePromise<$models.UpdateCheckResult> {
-    return $Call.ByID(670986527);
+    return $Call.ByID(670986527).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
 
 /**
@@ -50,3 +52,6 @@ export function GetVersion(): $CancellablePromise<string> {
 export function Restart(): $CancellablePromise<void> {
     return $Call.ByID(3205679179);
 }
+
+// Private type creation functions
+const $$createType0 = $models.UpdateCheckResult.createFrom;

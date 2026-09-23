@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, watch } from "vue";
 import { useRepos } from "./stores/repos";
+import { useAi } from "./stores/ai";
 import { useRepo } from "./stores/repo";
 import { useUI } from "./stores/ui";
 import { useSettings } from "./stores/settings";
@@ -23,6 +24,7 @@ import SettingsPanel from "./components/settings/SettingsPanel.vue";
 import DebugPanel from "./components/common/DebugPanel.vue";
 
 const repos = useRepos();
+const ai = useAi();
 const repo = useRepo();
 const ui = useUI();
 const settings = useSettings();
@@ -30,6 +32,7 @@ const settings = useSettings();
 onMounted(() => {
 	settings.init();
 	repos.load();
+	void ai.load();
 });
 
 // 仓库变化全部由后端 fsnotify 推送的 repo:changed 事件驱动（见 watcher.go），

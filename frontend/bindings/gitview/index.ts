@@ -12,7 +12,8 @@ export {
     UpdateService
 };
 
-export type {
+export {
+    AiProvider,
     BranchInfo,
     BranchOptions,
     CloneOptions,

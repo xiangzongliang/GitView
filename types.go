@@ -24,6 +24,16 @@ type GroupInfo struct {
 	TextColor string `json:"textColor,omitempty"`
 }
 
+// AiProvider is one configured AI model service (Base URL / API Key + models).
+// Stored in the app config file so it survives restarts like repos/groups.
+type AiProvider struct {
+	ID      string   `json:"id"`
+	Title   string   `json:"title"`
+	BaseURL string   `json:"baseUrl"`
+	APIKey  string   `json:"apiKey"`
+	Models  []string `json:"models"`
+}
+
 // FileStatus describes one changed file in the index or worktree.
 type FileStatus struct {
 	Path       string `json:"path"`

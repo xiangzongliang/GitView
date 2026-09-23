@@ -114,7 +114,7 @@ graph TD
 
 ### 3.3 配置与数据存储
 
-- **应用配置**：`os.UserConfigDir()/GitView/config.json`（仓库列表、分组、顺序、折叠状态等）；配置损坏或不可用时自动降级为「无持久化运行」，不阻塞启动。
+- **应用配置**：`os.UserConfigDir()/GitView/config.json`（仓库列表、分组、顺序、折叠状态、AI 模型服务配置等）；配置损坏或不可用时自动降级为「无持久化运行」，不阻塞启动。
 - **构建配置**：`build/config.yml`（产品名、标识、版本、图标等）。修改 `info` 或 `fileAssociations` 后需运行 `wails3 task common:update:build-assets` 重新生成构建资产。
 - **更新源**：`updaterservice.go` 顶部常量（默认 `https://xais.iepose.cn` + `/api/v1/gitview/updates/manifest`），支持环境变量与构建期注入。该接口为 GitView 专属（对应后端 `gitview_releases` 表），与 pcApp 的 `/api/v1/updates/manifest` 完全独立。
 

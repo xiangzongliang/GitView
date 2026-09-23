@@ -9,7 +9,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -60,8 +60,10 @@ export function CommitDiff(repoPath: string, hash: string, file: string): $Cance
 /**
  * CommitFiles lists the files changed in a commit with add/delete counts.
  */
-export function CommitFiles(repoPath: string, hash: string): $CancellablePromise<$models.CommitFile[] | null> {
-    return $Call.ByID(1929969579, repoPath, hash);
+export function CommitFiles(repoPath: string, hash: string): $CancellablePromise<$models.CommitFile[]> {
+    return $Call.ByID(1929969579, repoPath, hash).then(($result: any) => {
+        return $$createType1($result);
+    });
 }
 
 /**
@@ -103,7 +105,7 @@ export function DeleteTag(repoPath: string, name: string, remote: string): $Canc
  * Discard throws away local changes for the given paths:
  * tracked files are restored from HEAD, untracked files are deleted.
  */
-export function Discard(repoPath: string, files: string[] | null): $CancellablePromise<void> {
+export function Discard(repoPath: string, files: string[]): $CancellablePromise<void> {
     return $Call.ByID(3983866289, repoPath, files);
 }
 
@@ -118,15 +120,19 @@ export function Fetch(repoPath: string, remote: string, prune: boolean): $Cancel
  * GlobalConfig returns the values of the git config keys the settings panel
  * exposes. Missing keys are returned as empty strings.
  */
-export function GlobalConfig(): $CancellablePromise<{ [_ in string]?: string } | null> {
-    return $Call.ByID(322412488);
+export function GlobalConfig(): $CancellablePromise<{ [_ in string]?: string }> {
+    return $Call.ByID(322412488).then(($result: any) => {
+        return $$createType2($result);
+    });
 }
 
 /**
  * Log returns a page of commits, newest first.
  */
-export function Log(repoPath: string, opts: $models.LogOptions): $CancellablePromise<$models.Commit[] | null> {
-    return $Call.ByID(2074061505, repoPath, opts);
+export function Log(repoPath: string, opts: $models.LogOptions): $CancellablePromise<$models.Commit[]> {
+    return $Call.ByID(2074061505, repoPath, opts).then(($result: any) => {
+        return $$createType4($result);
+    });
 }
 
 /**
@@ -189,7 +195,9 @@ export function RebaseSkip(repoPath: string): $CancellablePromise<void> {
  * Refs returns branches, remotes (with their branches) and tags.
  */
 export function Refs(repoPath: string): $CancellablePromise<$models.RefsData | null> {
-    return $Call.ByID(2657193779, repoPath);
+    return $Call.ByID(2657193779, repoPath).then(($result: any) => {
+        return $$createType6($result);
+    });
 }
 
 /**
@@ -227,7 +235,9 @@ export function RevertAbort(repoPath: string): $CancellablePromise<void> {
  * Output is capped; only real startup failures return an error.
  */
 export function RunCommand(repoPath: string, cwd: string, command: string): $CancellablePromise<$models.CommandResult | null> {
-    return $Call.ByID(614596395, repoPath, cwd, command);
+    return $Call.ByID(614596395, repoPath, cwd, command).then(($result: any) => {
+        return $$createType8($result);
+    });
 }
 
 /**
@@ -241,13 +251,15 @@ export function SetGlobalConfig(key: string, value: string): $CancellablePromise
  * ShowCommit returns the full details of a single commit.
  */
 export function ShowCommit(repoPath: string, hash: string): $CancellablePromise<$models.Commit | null> {
-    return $Call.ByID(618206553, repoPath, hash);
+    return $Call.ByID(618206553, repoPath, hash).then(($result: any) => {
+        return $$createType9($result);
+    });
 }
 
 /**
  * Stage adds the given paths to the index.
  */
-export function Stage(repoPath: string, files: string[] | null): $CancellablePromise<void> {
+export function Stage(repoPath: string, files: string[]): $CancellablePromise<void> {
     return $Call.ByID(1407503261, repoPath, files);
 }
 
@@ -275,8 +287,10 @@ export function StashDrop(repoPath: string, index: number): $CancellablePromise<
 /**
  * StashList returns all stash entries, newest first.
  */
-export function StashList(repoPath: string): $CancellablePromise<$models.StashEntry[] | null> {
-    return $Call.ByID(615021102, repoPath);
+export function StashList(repoPath: string): $CancellablePromise<$models.StashEntry[]> {
+    return $Call.ByID(615021102, repoPath).then(($result: any) => {
+        return $$createType11($result);
+    });
 }
 
 /**
@@ -297,13 +311,15 @@ export function StashSave(repoPath: string, opts: $models.StashOptions): $Cancel
  * Status returns the working tree / index state of the repository.
  */
 export function Status(repoPath: string): $CancellablePromise<$models.RepoStatus | null> {
-    return $Call.ByID(1385891039, repoPath);
+    return $Call.ByID(1385891039, repoPath).then(($result: any) => {
+        return $$createType13($result);
+    });
 }
 
 /**
  * Unstage removes the given paths from the index (keeps worktree changes).
  */
-export function Unstage(repoPath: string, files: string[] | null): $CancellablePromise<void> {
+export function Unstage(repoPath: string, files: string[]): $CancellablePromise<void> {
     return $Call.ByID(3960242340, repoPath, files);
 }
 
@@ -326,14 +342,18 @@ export function UnwatchRepo(): $CancellablePromise<void> {
  * changes. Watching an already-watched path is a no-op.
  */
 export function WatchRepo(repoPath: string): $CancellablePromise<$models.WatchStatus | null> {
-    return $Call.ByID(422539044, repoPath);
+    return $Call.ByID(422539044, repoPath).then(($result: any) => {
+        return $$createType15($result);
+    });
 }
 
 /**
  * WatchStatus returns the current watcher state.
  */
 export function WatchStatus(): $CancellablePromise<$models.WatchStatus | null> {
-    return $Call.ByID(676392506);
+    return $Call.ByID(676392506).then(($result: any) => {
+        return $$createType15($result);
+    });
 }
 
 /**
@@ -343,3 +363,21 @@ export function WatchStatus(): $CancellablePromise<$models.WatchStatus | null> {
 export function WorktreeDiff(repoPath: string, file: string, staged: boolean): $CancellablePromise<string> {
     return $Call.ByID(108931279, repoPath, file, staged);
 }
+
+// Private type creation functions
+const $$createType0 = $models.CommitFile.createFrom;
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = $Create.Map($Create.Any, $Create.Any);
+const $$createType3 = $models.Commit.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = $models.RefsData.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
+const $$createType7 = $models.CommandResult.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = $Create.Nullable($$createType3);
+const $$createType10 = $models.StashEntry.createFrom;
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = $models.RepoStatus.createFrom;
+const $$createType13 = $Create.Nullable($$createType12);
+const $$createType14 = $models.WatchStatus.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
