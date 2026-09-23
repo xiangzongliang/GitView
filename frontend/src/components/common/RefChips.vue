@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { RefDecoration } from '../../api'
+import { copyText } from '../../api'
 import Icon from '../ui/Icon.vue'
+import Tooltip from '../ui/Tooltip.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -26,16 +28,36 @@ function chipClass(r: RefDecoration): string {
 function chipIcon(r: RefDecoration): string {
   return r.type === 'tag' ? 'tag' : r.type === 'remote' ? 'cloud' : 'branch'
 }
+
+/** 点击 chip 直接复制分支 / 标签名 */
+function copyName(r: RefDecoration) {
+  void copyText(r.name)
+}
 </script>
 
 <template>
   <span v-if="head" class="chip chip-head">
-    <Icon name="commit" :size="10" />
+    <Icon class="chip-icon" name="commit" :size="10" />
     HEAD
   </span>
-  <span v-for="(r, i) in shown" :key="i" :class="chipClass(r)" :title="r.name">
-    <Icon :name="chipIcon(r)" :size="10" />
-    <span class="chip-name">{{ r.name }}</span>
-  </span>
-  <span v-if="rest.length" class="chip chip-more" :title="restTitle">+{{ rest.length }}</span>
+  <Tooltip
+    v-for="(r, i) in shown"
+    :key="i"
+    class="chip-tip"
+    :text="r.name"
+    :delay="250"
+  >
+    <span
+      :class="chipClass(r)"
+      class="chip-copy"
+      @click.stop="copyName(r)"
+      @dblclick.stop
+    >
+      <Icon class="chip-icon" :name="chipIcon(r)" :size="10" />
+      <span class="chip-name">{{ r.name }}</span>
+    </span>
+  </Tooltip>
+  <Tooltip v-if="rest.length" class="chip-tip" :text="restTitle" :delay="250">
+    <span class="chip chip-more">+{{ rest.length }}</span>
+  </Tooltip>
 </template>

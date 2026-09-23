@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import type { MenuItem } from "../../stores/ui";
 import { copyText } from "../../api";
 import { laneColor, relTime, shortHash } from "../../utils/format";
-import { ROW_H, laneX, graphWidth } from "../../utils/graph";
+import { ROW_H, laneX } from "../../utils/graph";
 import type { GraphCurve, GraphRow } from "../../utils/graph";
 import RefChips from "../common/RefChips.vue";
 
 const props = defineProps<{
 	row: GraphRow;
-	laneCount: number;
+	/** 图形列宽度，由父级统一计算后下发（表头与各行共用同一值） */
+	graphW: number;
 	selected: boolean;
 	refsW: number;
 }>();
@@ -18,9 +20,13 @@ const props = defineProps<{
 const repo = useRepo();
 const ui = useUI();
 
-const w = graphWidth(props.laneCount);
+// 关键：几何量必须是响应式的。列表以 commit hash 作为 v-for key，切换分支时
+// 同一提交的行组件实例会被 Vue 复用（setup 不会重跑），若在 setup 里用普通常量
+// 缓存泳道坐标 / 画布宽度，复用后仍沿用上一分支的旧值 —— 圆点、竖线落在旧的 x，
+// 曲线却按新泳道绘制，于是图形“错乱”，且与表头「分支 / 标签」列错位。
+const w = computed(() => props.graphW);
 const mid = ROW_H / 2;
-const dotX = laneX(props.row.lane);
+const dotX = computed(() => laneX(props.row.lane));
 
 function curvePath(c: GraphCurve): string {
 	const x1 = laneX(c.from);

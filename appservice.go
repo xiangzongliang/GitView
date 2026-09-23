@@ -1,5 +1,7 @@
 package main
 
+import "strings"
+
 // AppService exposes application-level information (version, author) to the
 // frontend settings panel.
 type AppService struct{}
@@ -18,4 +20,15 @@ func (s *AppService) Version() string {
 // Author returns the application author.
 func (s *AppService) Author() string {
 	return appAuthor
+}
+
+// GitVersion returns the installed git version without the leading
+// "git version " prefix (e.g. "2.50.1 (Apple Git-155)"). Empty when git is
+// unavailable.
+func (s *AppService) GitVersion() string {
+	out, err := runGit("", "--version")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(strings.TrimSpace(out), "git version ")
 }

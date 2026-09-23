@@ -37,6 +37,15 @@ export function GitLog(since: number): $CancellablePromise<$models.GitLogEntry[]
 }
 
 /**
+ * GitVersion returns the installed git version without the leading
+ * "git version " prefix (e.g. "2.50.1 (Apple Git-155)"). Empty when git is
+ * unavailable.
+ */
+export function GitVersion(): $CancellablePromise<string> {
+    return $Call.ByID(1917386422);
+}
+
+/**
  * Version returns the application version string.
  */
 export function Version(): $CancellablePromise<string> {

@@ -81,7 +81,7 @@
 }
 
 /* 亮色主题：仅覆盖颜色 token，布局 token 保持不变 */
-:root[data-theme='light'] {
+:root[data-theme="light"] {
 	--bg-app: #f2f3f5;
 	--bg-panel: #ffffff;
 	--bg-panel-2: #f6f7f9;
@@ -448,6 +448,20 @@ textarea {
 	border-color: var(--border-strong);
 	background: var(--bg-panel-2);
 	padding: 0 5px;
+}
+/* 分支 / 标签 chip：图标固定尺寸不压缩，名称超出省略，点击复制 */
+.chip-tip {
+	min-width: 0;
+	max-width: 100%;
+}
+.chip-icon {
+	flex: none;
+}
+.chip-copy {
+	cursor: pointer;
+}
+.chip-copy:active {
+	opacity: 0.75;
 }
 
 .spin {

@@ -13,8 +13,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// 仓库变化监听（fsnotify）：只是为了把“外部改动”尽快推给前端，
-// 不追求 100% 覆盖 —— 前端仍保留一个低频兜底轮询。
+// 仓库变化监听（fsnotify）：把“外部改动”尽快推给前端。前端不做后台轮询，
+// git 命令只在用户操作、监听事件或窗口重新可见时执行（见 docs/fs-watch.md）。
 //
 // 设计约束（见 docs/fs-watch.md）：
 //   - 只监听固定的小集合（.git 目录、refs 常用目录、少数关键文件），
@@ -25,6 +25,10 @@ import (
 //     atime”“chmod/chown”都会上报 NOTE_ATTRIB→Chmod，而 `git status` 读 index
 //     就会触发。它不代表仓库内容变化，若上报会与自身命令形成自激刷新。
 //     内容变化一定带 Write/Create/Remove/Rename，丢弃 Chmod 不会漏掉真实改动。
+//   - 自身命令的“安静窗口”：本应用执行的 git 命令也会写 .git（index/refs/HEAD…），
+//     这些事件不是外部改动（操作结束后前端已主动刷新），因此在命令执行期间与
+//     结束后的短暂窗口内一律忽略（ownGitActivity）。这是对丢弃 Chmod 的兜底，
+//     保证无论哪个内部命令写了什么都不会触发刷新。
 const (
 	repoChangedEvent = "repo:changed"
 
@@ -221,6 +225,20 @@ func (w *repoWatcher) handle(ev fsnotify.Event) {
 		w.countIgnored()
 		return
 	}
+	// 目录增删可能带来新的 ref 目录 / 出现或消失的 MERGE_HEAD 等，重新对齐
+	// 监听集合（有上限，见 syncWatches）。即使是自身命令引起的也要保持集合正确，
+	// 只是不上报刷新。
+	if ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) != 0 {
+		defer w.syncWatches()
+	}
+	// 自身命令引起的变化：本应用自己跑的 git 命令（status/diff/commit…）也会写
+	// .git，由此产生的事件不是外部改动（操作结束后前端已主动刷新），必须忽略，
+	// 否则会和自身命令形成自激刷新循环。这是对上面“丢弃 Chmod”的兜底：无论哪个
+	// 内部命令写了什么，都不会触发刷新。
+	if ownGitActivity() {
+		w.countIgnored()
+		return
+	}
 	kind := w.classify(ev.Name)
 	if kind == "" {
 		// .lock / reflog 等噪声：只计数，不触发刷新
@@ -255,12 +273,6 @@ func (w *repoWatcher) handle(ev fsnotify.Event) {
 	}
 	w.timer = time.AfterFunc(delay, w.flush)
 	w.mu.Unlock()
-
-	// 目录增删可能带来新的 ref 目录 / 出现或消失的 MERGE_HEAD 等，
-	// 重新对齐监听集合（有上限，见 syncWatches）。
-	if ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) != 0 {
-		w.syncWatches()
-	}
 }
 
 // countIgnored records a noise event that must not trigger a refresh.

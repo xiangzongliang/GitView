@@ -114,7 +114,7 @@ function onLeave() {
 .tooltip-bubble {
 	position: fixed;
 	z-index: 2000;
-	max-width: 280px;
+	max-width: 300px;
 	padding: 4px 8px;
 	border-radius: 6px;
 	background: var(--tooltip-bg);
@@ -123,7 +123,9 @@ function onLeave() {
 	color: var(--text-strong);
 	font-size: 11.5px;
 	line-height: 1.4;
-	white-space: nowrap;
+	/* 短文本保持单行；过长内容（如分支全名）在 max-width 内自动换行 */
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 	pointer-events: none;
 	/* 只做淡入：transform 被用于定位，不能用动画覆盖 */
 	animation: tip-in 0.1s ease-out;

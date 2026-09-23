@@ -51,6 +51,24 @@ const canCommit = computed(
 );
 const merging = computed(() => !!repo.status?.merging);
 
+// 已提交但尚未推送的提交数（顶部 Push 按钮的角标同样取此值）
+const ahead = computed(() => repo.status?.ahead || 0);
+/**
+ * 无待提交更改、但有未推送提交时，提交按钮变为 Push：
+ * 这样提交完直接在这里推送，无需再点顶部工具栏的 Push。
+ * 一旦还有未提交的文件（dirtyCount > 0）或勾选了 Amend，就回到正常提交按钮。
+ */
+const pushMode = computed(
+	() =>
+		!repo.opInProgress &&
+		repo.dirtyCount === 0 &&
+		ahead.value > 0 &&
+		!repo.amend,
+);
+function countText(n: number): string {
+	return n > 99 ? "99+" : String(n);
+}
+
 function onKeydown(e: KeyboardEvent) {
 	if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
 		e.preventDefault();
@@ -95,6 +113,23 @@ watch(
 					</label>
 					<div class="spacer" />
 					<button
+						v-if="pushMode"
+						class="btn btn-primary commit-btn"
+						:disabled="!!ui.opRunning"
+						title="没有待提交的更改，把本地提交推送到远程"
+						@click="ui.openDialog('push')"
+					>
+						<Spinner v-if="ui.isOp('push')" :size="13" />
+						<Icon v-else name="push" :size="13" />
+						{{ ui.isOp("push") ? "推送中…" : "Push" }}
+						<span
+							v-if="ahead && !ui.isOp('push')"
+							class="push-badge"
+							>{{ countText(ahead) }}</span
+						>
+					</button>
+					<button
+						v-else
 						class="btn btn-primary commit-btn"
 						:disabled="!canCommit"
 						@click="repo.doCommit()"
@@ -199,5 +234,24 @@ watch(
 }
 .commit-btn {
 	min-width: 84px;
+	position: relative;
+}
+/* 待推送提交数角标（按钮变为 Push 时显示） */
+.push-badge {
+	position: absolute;
+	top: -6px;
+	right: -6px;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border: 1.5px solid var(--bg-panel);
+	border-radius: 8px;
+	background: var(--accent);
+	color: #fff;
+	font-size: 9.5px;
+	font-weight: 700;
+	line-height: 13px;
+	text-align: center;
+	pointer-events: none;
 }
 </style>

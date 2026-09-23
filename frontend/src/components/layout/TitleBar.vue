@@ -101,7 +101,7 @@ const branchChips = computed<RefDecoration[] | null>(() => {
 }
 .title-actions {
 	position: absolute;
-	right: 12px;
+	right: 18px;
 	/* 与 .title-center 同一水平中心线，保证和路径/分支等内容垂直居中对齐 */
 	top: 50%;
 	transform: translateY(-50%);

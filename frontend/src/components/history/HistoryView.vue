@@ -22,15 +22,18 @@ const total = computed(() => rows.value.length * ROW_H);
 
 // ------------------------------------------------- resizable refs column (req: header drag)
 const REFS_W_KEY = "gv.refsW";
-const refsW = ref(Number(localStorage.getItem(REFS_W_KEY)) || 140);
+/** 默认列宽：足以容纳两个 chip（图标固定尺寸，名称超出以省略号截断） */
+const REFS_W_MIN = 80;
+const REFS_W_MAX = 460;
+const refsW = ref(Number(localStorage.getItem(REFS_W_KEY)) || 200);
 function startRefsDrag(e: MouseEvent) {
 	e.preventDefault();
 	const startX = e.clientX;
 	const startW = refsW.value;
 	const move = (ev: MouseEvent) => {
 		refsW.value = Math.min(
-			420,
-			Math.max(60, startW + (ev.clientX - startX)),
+			REFS_W_MAX,
+			Math.max(REFS_W_MIN, startW + (ev.clientX - startX)),
 		);
 	};
 	const up = () => {
@@ -177,7 +180,7 @@ const unborn = computed(
 					分支 / 标签
 					<span
 						class="lh-grip"
-						title="拖动调整列宽（60 ~ 420px）"
+						title="拖动调整列宽（80 ~ 460px）"
 						@mousedown="startRefsDrag"
 					/>
 				</span>
@@ -208,7 +211,7 @@ const unborn = computed(
 							v-for="r in slice"
 							:key="r.commit.hash"
 							:row="r"
-							:lane-count="laneCount"
+							:graph-w="graphW"
 							:selected="r.commit.hash === repo.selectedHash"
 							:refs-w="refsW"
 						/>

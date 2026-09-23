@@ -8,22 +8,57 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // gitDirCache memoizes `git rev-parse --absolute-git-dir` per repository path.
 var gitDirCache sync.Map
 
+// 自身命令的“安静窗口”。本应用执行的 git 命令会改动 .git（index、refs、HEAD…），
+// 由此产生的 fsnotify 事件并不是外部改动；若把它当作仓库变化上报，就会与自身
+// 命令形成自激刷新（读一次 → 写一次 → 再读一次……）。这里记录命令的起止时间，
+// 供监听侧屏蔽这类“自我触发”的事件。
+//
+// 屏蔽不会漏掉需要展示的变化：每个操作结束后前端都会主动 refreshAll()，
+// 而工作区文件的改动本来就不触碰 .git（监听看不到），因此无需依赖这些事件。
+var (
+	gitCmdInFlight atomic.Int64
+	gitCmdLastDone atomic.Int64 // unix 毫秒
+)
+
+// ownGitQuietWindow 是命令结束后继续忽略自我事件的时长，用来覆盖 lock+rename
+// 落盘与事件送达之间的延迟。
+const ownGitQuietWindow = 800 * time.Millisecond
+
+func markGitCmdStart() { gitCmdInFlight.Add(1) }
+
+func markGitCmdDone() {
+	gitCmdLastDone.Store(time.Now().UnixMilli())
+	gitCmdInFlight.Add(-1)
+}
+
+// ownGitActivity reports whether one of our own git commands is running or has
+// just finished — i.e. whether a .git change is (probably) self-inflicted and
+// must not trigger a refresh.
+func ownGitActivity() bool {
+	if gitCmdInFlight.Load() > 0 {
+		return true
+	}
+	last := gitCmdLastDone.Load()
+	return last != 0 && time.Since(time.UnixMilli(last)) < ownGitQuietWindow
+}
+
 // gitEnv is appended to every git invocation so output is stable and git never
 // blocks on interactive prompts (credentials, editors, pagers).
 func gitEnv() []string {
 	return append(os.Environ(),
-		"LC_ALL=C",                // stable, English output
-		"GIT_PAGER=cat",           // never paginate
-		"PAGER=cat",               // never paginate
-		"GIT_EDITOR=true",         // never open an interactive editor
-		"EDITOR=true",             // never open an interactive editor
-		"GIT_TERMINAL_PROMPT=0",   // fail instead of prompting for credentials
+		"LC_ALL=C",              // stable, English output
+		"GIT_PAGER=cat",         // never paginate
+		"PAGER=cat",             // never paginate
+		"GIT_EDITOR=true",       // never open an interactive editor
+		"EDITOR=true",           // never open an interactive editor
+		"GIT_TERMINAL_PROMPT=0", // fail instead of prompting for credentials
 	)
 }
 
@@ -61,6 +96,8 @@ func runGitCtx(ctx context.Context, repoPath string, args ...string) (string, er
 
 // runGitCtxEnv executes git with extra environment entries appended.
 func runGitCtxEnv(ctx context.Context, repoPath string, extraEnv []string, args ...string) (string, error) {
+	markGitCmdStart()
+	defer markGitCmdDone()
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	if repoPath != "" {

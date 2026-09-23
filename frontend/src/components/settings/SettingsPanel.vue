@@ -69,6 +69,7 @@ async function saveConfig() {
 // ---------------------------------------------------------------------- about
 const version = ref("");
 const author = ref("");
+const gitVersion = ref("");
 
 onMounted(async () => {
 	try {
@@ -78,6 +79,11 @@ onMounted(async () => {
 	}
 	try {
 		author.value = (await AppService.Author()) || "";
+	} catch {
+		/* ignore */
+	}
+	try {
+		gitVersion.value = (await AppService.GitVersion()) || "";
 	} catch {
 		/* ignore */
 	}
@@ -309,6 +315,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 											</dd>
 										</div>
 										<div class="meta-row">
+											<dt>Git 版本</dt>
+											<dd class="mono">
+												{{ gitVersion || "未检测到" }}
+											</dd>
+										</div>
+										<div class="meta-row">
 											<dt>作者</dt>
 											<dd>{{ author || "-" }}</dd>
 										</div>
@@ -389,24 +401,28 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 }
 .settings-nav {
 	flex: none;
-	width: 132px;
-	padding: 10px 8px;
+	width: 148px;
+	padding: 12px 10px;
 	border-right: 1px solid var(--border);
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 3px;
 	background: var(--bg-sidebar);
 }
 .nav-item {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	height: 30px;
+	height: 32px;
 	padding: 0 10px;
 	border-radius: 7px;
 	font-size: 12.5px;
 	color: var(--text-dim);
 	text-align: left;
+	transition:
+		background 0.12s ease,
+		color 0.12s ease;
 }
 .nav-item:hover {
 	background: var(--bg-hover);
@@ -415,6 +431,19 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .nav-item.active {
 	background: var(--bg-selected);
 	color: var(--text-strong);
+	font-weight: 600;
+}
+/* 选中项左侧强调条 */
+.nav-item.active::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 3px;
+	height: 16px;
+	border-radius: 0 2px 2px 0;
+	background: var(--accent);
 }
 
 .settings-content {
@@ -424,7 +453,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 	padding: 16px 18px;
 }
 .group {
-	margin-bottom: 22px;
+	background: var(--bg-panel-2);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 14px 14px 16px;
+	margin-bottom: 12px;
 }
 .group-title {
 	font-size: 13px;
@@ -551,20 +584,34 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 	margin: 3px 0 16px;
 }
 .about-meta {
-	width: 220px;
-	border-top: 1px solid var(--border);
-	padding-top: 12px;
+	width: 300px;
+	max-width: 100%;
+	margin-top: 4px;
+	padding: 6px 14px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--bg-panel-2);
 }
 .meta-row {
 	display: flex;
 	justify-content: space-between;
-	padding: 4px 0;
+	align-items: center;
+	gap: 12px;
+	padding: 7px 0;
 	font-size: 12.5px;
 }
+.meta-row + .meta-row {
+	border-top: 1px solid var(--border);
+}
 .meta-row dt {
+	flex: none;
 	color: var(--text-faint);
 }
 .meta-row dd {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	color: var(--text-strong);
 }
 

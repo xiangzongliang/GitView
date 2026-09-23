@@ -33,6 +33,51 @@ const watchInfo = ref<WatchStatus | null>(null);
 let timer: number | undefined;
 let tick = 0;
 
+// ------------------------------------------------------- 拖拽顶部调整高度
+// 面板锚定右下角、宽度固定：向上拖（clientY 变小）→ 变高。
+const HEIGHT_KEY = "gv.debugH";
+const MIN_H = 160;
+const PANEL_BOTTOM = 34; // 与 .dbg 的 bottom 保持一致
+const TOP_RESERVE = 96; // 顶部为标题栏 / 工具栏留出空间
+function maxHeight(): number {
+	return Math.max(MIN_H, window.innerHeight - PANEL_BOTTOM - TOP_RESERVE);
+}
+const height = ref(
+	Math.min(
+		Math.max(MIN_H, Number(localStorage.getItem(HEIGHT_KEY)) || 320),
+		maxHeight(),
+	),
+);
+
+function startResize(e: MouseEvent) {
+	// 点在按钮上时不触发拖拽，保留按钮自身的点击行为
+	if ((e.target as HTMLElement).closest("button")) return;
+	e.preventDefault();
+	const startY = e.clientY;
+	const startH = height.value;
+	const move = (ev: MouseEvent) => {
+		height.value = Math.min(
+			Math.max(MIN_H, startH + (startY - ev.clientY)),
+			maxHeight(),
+		);
+	};
+	const up = () => {
+		document.removeEventListener("mousemove", move);
+		document.removeEventListener("mouseup", up);
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		try {
+			localStorage.setItem(HEIGHT_KEY, String(height.value));
+		} catch {
+			/* ignore */
+		}
+	};
+	document.addEventListener("mousemove", move);
+	document.addEventListener("mouseup", up);
+	document.body.style.cursor = "ns-resize";
+	document.body.style.userSelect = "none";
+}
+
 async function loadWatchInfo() {
 	try {
 		watchInfo.value = await GitService.WatchStatus();
@@ -161,8 +206,8 @@ function kindMeta(e: GitLogEntry): { glyph: string; cls: string; label: string }
 </script>
 
 <template>
-	<div v-if="ui.debugOpen" class="dbg">
-		<header class="dbg-head">
+	<div v-if="ui.debugOpen" class="dbg" :style="{ height: height + 'px' }">
+		<header class="dbg-head" @mousedown="startResize">
 			<span class="dbg-title">
 				<Icon name="bug" :size="13" />
 				调试 · 命令日志
@@ -218,6 +263,7 @@ function kindMeta(e: GitLogEntry): { glyph: string; cls: string; label: string }
 			>
 				<Icon name="x" :size="13" />
 			</button>
+			<span class="dbg-grip" title="拖动调整高度" />
 		</header>
 
 		<div ref="body" class="dbg-body" @scroll="onScroll">
@@ -282,7 +328,8 @@ function kindMeta(e: GitLogEntry): { glyph: string; cls: string; label: string }
 	bottom: 34px;
 	z-index: 850;
 	width: min(680px, calc(100vw - 24px));
-	height: 320px;
+	/* 高度由顶部拖拽调整（见 startResize），这里给出视口兜底上限 */
+	max-height: calc(100vh - 130px);
 	display: flex;
 	flex-direction: column;
 	background: var(--bg-panel);
@@ -307,6 +354,23 @@ function kindMeta(e: GitLogEntry): { glyph: string; cls: string; label: string }
 	padding: 0 8px 0 12px;
 	border-bottom: 1px solid var(--border);
 	background: var(--bg-panel-2);
+	position: relative;
+	cursor: ns-resize; /* 拖拽顶部可调整面板高度 */
+}
+/* 顶部拖拽手柄：仅作视觉提示，实际拖拽由 .dbg-head 处理 */
+.dbg-grip {
+	position: absolute;
+	top: 4px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 36px;
+	height: 3px;
+	border-radius: 2px;
+	background: var(--border-strong);
+	pointer-events: none;
+}
+.dbg-head:hover .dbg-grip {
+	background: var(--text-faint);
 }
 .dbg-title {
 	display: inline-flex;

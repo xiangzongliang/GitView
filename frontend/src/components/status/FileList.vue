@@ -299,9 +299,12 @@ function fileMenu(e: MouseEvent, f: Row) {
 				</span>
 			</div>
 		</template>
-		<div v-else class="empty-hint">
-			<Icon name="check" :size="20" />
-			<span>工作区干净，没有待提交的更改</span>
+		<div v-else class="empty-hint clean">
+			<span class="clean-badge">
+				<Icon name="check" :size="18" />
+			</span>
+			<p class="clean-title">工作区干净</p>
+			<p class="clean-sub">没有待提交的更改</p>
 		</div>
 	</div>
 </template>
@@ -404,6 +407,33 @@ function fileMenu(e: MouseEvent, f: Row) {
 .empty-hint {
 	padding: 36px 14px;
 	text-align: center;
+}
+/* 干净状态：圆形勾选徽标 + 两行文字，比单行提示更清爽 */
+.empty-hint.clean {
+	gap: 0;
+	padding: 40px 16px;
+}
+.clean-badge {
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 12px;
+	color: var(--green);
+	background: var(--diff-add-bg);
+	border: 1px solid var(--chip-branch-bd);
+}
+.clean-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-dim);
+	margin-bottom: 3px;
+}
+.clean-sub {
+	font-size: 11.5px;
+	color: var(--text-faint);
 }
 .spinner {
 	width: 15px;
