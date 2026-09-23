@@ -43,7 +43,7 @@ const icons: Record<string, string> = { success: 'check', error: 'alert', info: 
   border-left: 3px solid var(--accent);
   border-radius: 8px;
   padding: 10px 12px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-toast);
 }
 .toast-success { border-left-color: var(--green); }
 .toast-success .toast-icon { color: var(--green); }

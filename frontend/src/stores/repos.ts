@@ -9,6 +9,9 @@ export interface RepoGroup {
 	entries: RepoEntry[];
 }
 
+/** 布局写盘去抖定时器（就地编辑分组外观时避免每次点击都写盘） */
+let layoutSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const useRepos = defineStore("repos", {
 	state: () => ({
 		entries: [] as RepoEntry[],
@@ -78,7 +81,13 @@ export const useRepos = defineStore("repos", {
 				this.entries = entries || [];
 				this.groups = (groups || [])
 					.filter((g) => g && g.name)
-					.map((g) => ({ name: g.name, collapsed: !!g.collapsed }));
+					.map((g) => ({
+						name: g.name,
+						collapsed: !!g.collapsed,
+						icon: g.icon || "",
+						iconColor: g.iconColor || "",
+						textColor: g.textColor || "",
+					}));
 				// 兼容旧配置：entries 中出现但未登记的分组补登记
 				this.ensureGroupsRegistered();
 			} catch (e) {
@@ -115,6 +124,9 @@ export const useRepos = defineStore("repos", {
 					this.groups.map((g) => ({
 						name: g.name,
 						collapsed: !!g.collapsed,
+						icon: g.icon || "",
+						iconColor: g.iconColor || "",
+						textColor: g.textColor || "",
 					})),
 				);
 			} catch (e) {
@@ -155,6 +167,33 @@ export const useRepos = defineStore("repos", {
 			this.groups.push({ name: n, collapsed: false });
 			void this.saveLayout();
 			return true;
+		},
+		/** 更新分组外观（图标 / 图标颜色 / 文字颜色）：本地立即生效，写盘去抖 */
+		setGroupStyle(
+			name: string,
+			style: { icon?: string; iconColor?: string; textColor?: string },
+		) {
+			const g = this.groups.find((x) => x.name === name);
+			if (!g) return;
+			g.icon = style.icon || "";
+			g.iconColor = style.iconColor || "";
+			g.textColor = style.textColor || "";
+			this.scheduleLayoutSave();
+		},
+		/** 去抖保存布局（高频就地编辑用）；可用 flushLayoutSave 立即落盘 */
+		scheduleLayoutSave(delay = 500) {
+			if (layoutSaveTimer) clearTimeout(layoutSaveTimer);
+			layoutSaveTimer = setTimeout(() => {
+				layoutSaveTimer = null;
+				void this.saveLayout();
+			}, delay);
+		},
+		/** 若有待保存的布局变更，立即落盘（关闭就地编辑弹层时调用） */
+		flushLayoutSave() {
+			if (!layoutSaveTimer) return;
+			clearTimeout(layoutSaveTimer);
+			layoutSaveTimer = null;
+			void this.saveLayout();
 		},
 		async renameGroup(from: string, to: string): Promise<boolean> {
 			const n = to.trim();

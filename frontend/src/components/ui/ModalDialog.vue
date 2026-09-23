@@ -58,7 +58,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey, true));
 	background: var(--bg-panel);
 	border: 1px solid var(--border-strong);
 	border-radius: 12px;
-	box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+	box-shadow: var(--shadow-modal);
 	max-width: calc(100vw - 48px);
 	max-height: calc(100vh - 16vh - 40px);
 	display: flex;

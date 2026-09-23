@@ -180,7 +180,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 											<Icon
 												v-if="settings.accent === a.key"
 												name="check"
-												:size="14"
+												:size="11"
 											/>
 										</button>
 									</div>
@@ -191,7 +191,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 									<p class="group-desc">
 										应用的整体配色（界面背景、文字颜色）。
 									</p>
-									<div class="mode-row">
+									<div class="mode-group">
 										<button
 											class="mode-btn"
 											:class="{
@@ -356,7 +356,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 	flex-direction: column;
 	background: var(--bg-panel);
 	border-left: 1px solid var(--border-strong);
-	box-shadow: -14px 0 44px rgba(0, 0, 0, 0.4);
+	box-shadow: var(--shadow-panel);
 }
 /* slide-in / out */
 .settings-enter-active,
@@ -429,19 +429,17 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 	color: var(--text-strong);
 }
 .nav-item.active {
-	background: var(--bg-selected);
-	color: var(--text-strong);
 	font-weight: 600;
 }
-/* 选中项左侧强调条 */
+/* 选中项左侧强调条（不改变背景与文字颜色） */
 .nav-item.active::before {
 	content: "";
 	position: absolute;
 	left: 0;
 	top: 50%;
 	transform: translateY(-50%);
-	width: 3px;
-	height: 16px;
+	width: 2px;
+	height: 15px;
 	border-radius: 0 2px 2px 0;
 	background: var(--accent);
 }
@@ -474,11 +472,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 /* 主题色色板 */
 .swatches {
 	display: flex;
-	gap: 10px;
+	flex-wrap: wrap;
+	gap: 8px;
 }
 .swatch {
-	width: 30px;
-	height: 30px;
+	width: 22px;
+	height: 22px;
 	border-radius: 50%;
 	background: var(--swatch);
 	border: 2px solid transparent;
@@ -491,7 +490,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 		box-shadow 0.12s ease;
 }
 .swatch:hover {
-	transform: scale(1.08);
+	transform: scale(1.1);
 }
 .swatch.active {
 	box-shadow:
@@ -499,28 +498,34 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 		0 0 0 4px var(--swatch);
 }
 
-/* 外观模式 */
-.mode-row {
-	display: flex;
-	gap: 8px;
+/* 外观模式：整体一个按钮组，中间用分隔线分割，选中项有独立样式 */
+.mode-group {
+	display: inline-flex;
+	border: 1px solid var(--border-strong);
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--bg-input);
 }
 .mode-btn {
 	height: 30px;
-	padding: 0 16px;
-	border: 1px solid var(--border-strong);
-	border-radius: 8px;
-	background: var(--bg-input);
+	padding: 0 18px;
+	background: transparent;
 	color: var(--text-dim);
 	font-size: 12.5px;
 }
+.mode-btn + .mode-btn {
+	border-left: 1px solid var(--border);
+}
 .mode-btn:hover {
 	color: var(--text-strong);
-	border-color: var(--accent);
 }
 .mode-btn.active {
-	background: var(--bg-selected);
-	border-color: var(--accent);
-	color: var(--text-strong);
+	background: var(--accent);
+	color: #fff;
+	font-weight: 600;
+}
+.mode-btn.active:hover {
+	color: #fff;
 }
 
 /* Git 配置 */

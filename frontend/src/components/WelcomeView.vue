@@ -64,7 +64,7 @@ async function initRepo() {
 		var(--welcome-grad-b)
 	);
 	border: 1px solid var(--border-strong);
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+	box-shadow: var(--shadow-logo);
 	margin-bottom: 6px;
 }
 .title {

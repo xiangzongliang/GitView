@@ -100,7 +100,7 @@ function click(action?: () => void) {
 	border: 1px solid var(--border-strong);
 	border-radius: 8px;
 	padding: 4px;
-	box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+	box-shadow: var(--shadow-menu);
 	transform-origin: top left;
 	animation: ctx-in 0.13s ease-out;
 }

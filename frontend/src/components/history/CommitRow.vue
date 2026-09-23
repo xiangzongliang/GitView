@@ -247,7 +247,6 @@ async function dblClick() {
 .time {
 	flex: none;
 	width: 86px;
-	text-align: right;
 	font-size: 11px;
 	color: var(--text-faint);
 	white-space: nowrap;

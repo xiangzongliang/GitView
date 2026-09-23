@@ -15,6 +15,13 @@ type RepoEntry struct {
 type GroupInfo struct {
 	Name      string `json:"name"`
 	Collapsed bool   `json:"collapsed"`
+	// Icon is a lucide icon key (see frontend/src/utils/groupIcons.ts);
+	// "" falls back to the default folder icon.
+	Icon string `json:"icon,omitempty"`
+	// IconColor is a CSS color for the group icon; "" inherits the theme color.
+	IconColor string `json:"iconColor,omitempty"`
+	// TextColor is a CSS color for the group label; "" inherits the theme color.
+	TextColor string `json:"textColor,omitempty"`
 }
 
 // FileStatus describes one changed file in the index or worktree.

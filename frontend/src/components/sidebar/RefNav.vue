@@ -406,7 +406,7 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 									? 'chevron-down'
 									: 'chevron-right'
 							"
-							:size="11"
+							:size="12"
 							class="faint"
 						/>
 						<Icon name="cloud" :size="12" class="purple-ic" />
@@ -415,7 +415,7 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 							(r.branches || []).length
 						}}</span>
 					</div>
-					<template v-if="remoteOpen[r.name]">
+					<div v-if="remoteOpen[r.name]" class="child-body">
 						<div
 							v-for="b in r.branches || []"
 							:key="b.name"
@@ -443,7 +443,7 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 						>
 							没有远程分支（试试 Fetch）
 						</div>
-					</template>
+					</div>
 				</template>
 				<div v-if="remotes.length === 0" class="nav-empty">
 					没有配置远程
@@ -584,7 +584,8 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 4px 10px 4px 16px;
+	/* 一级项：与各分区下的条目统一缩进（见 style.css 的 --sb-l1） */
+	padding: 4px 10px 4px calc(var(--sb-l1) - var(--sb-gutter));
 	margin: 0 6px;
 	border-radius: 6px;
 	cursor: pointer;
@@ -602,8 +603,23 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 	color: var(--green);
 	font-weight: 600;
 }
+/* 二级项（远程分支等）：在引导线基础上再缩进一级 */
 .nav-row.child {
-	padding-left: 30px;
+	padding-left: calc(var(--sb-l2) - var(--sb-gutter));
+}
+/* 远程分支容器：树形层级引导线（与远程图标左缘对齐） */
+.child-body {
+	position: relative;
+}
+.child-body::before {
+	content: "";
+	position: absolute;
+	left: var(--sb-guide);
+	top: 1px;
+	bottom: 1px;
+	width: 1px;
+	background: var(--tree-line);
+	pointer-events: none;
 }
 .remote-row {
 	color: var(--text);
@@ -628,7 +644,7 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 }
 .dot.on {
 	background: var(--green);
-	box-shadow: 0 0 5px rgba(70, 194, 106, 0.7);
+	box-shadow: 0 0 5px var(--glow-green);
 }
 .purple-ic {
 	color: var(--purple);
@@ -639,11 +655,11 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 	flex: none;
 }
 .nav-empty {
-	padding: 3px 16px 5px 32px;
+	padding: 3px 16px 5px var(--sb-l1);
 	font-size: 11px;
 	color: var(--text-faint);
 }
 .nav-empty.child {
-	padding-left: 44px;
+	padding-left: var(--sb-l2);
 }
 </style>

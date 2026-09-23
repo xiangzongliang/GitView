@@ -269,7 +269,7 @@ onBeforeUnmount(detach);
 	background: var(--bg-panel-2);
 	border: 1px solid var(--border-strong);
 	border-radius: 8px;
-	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+	box-shadow: var(--shadow-select);
 	transform-origin: top center;
 	animation: sm-panel-in 0.14s ease-out;
 }

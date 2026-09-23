@@ -119,7 +119,7 @@ function onLeave() {
 	border-radius: 6px;
 	background: var(--tooltip-bg);
 	border: 1px solid var(--border-strong);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+	box-shadow: var(--shadow-tooltip);
 	color: var(--text-strong);
 	font-size: 11.5px;
 	line-height: 1.4;

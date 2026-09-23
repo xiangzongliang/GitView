@@ -26,6 +26,7 @@ import {
 	Info,
 	Minus,
 	Moon,
+	Palette,
 	Pencil,
 	Plus,
 	RefreshCw,
@@ -83,6 +84,7 @@ const map: Record<string, Component> = {
 	settings: Settings,
 	sun: Sun,
 	moon: Moon,
+	palette: Palette,
 };
 
 const icon = computed<Component>(() => map[props.name] || Info);

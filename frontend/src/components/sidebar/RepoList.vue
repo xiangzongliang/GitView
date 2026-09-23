@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, shallowRef } from "vue";
 import { useRepos } from "../../stores/repos";
 import { useUI } from "../../stores/ui";
 import { pickDirectory } from "../../api";
-import type { RepoEntry } from "../../api";
+import type { RepoEntry, GroupInfo } from "../../api";
 import Icon from "../ui/Icon.vue";
+import GroupIcon from "../ui/GroupIcon.vue";
+import GroupStylePopover from "./GroupStylePopover.vue";
 
 const repos = useRepos();
 const ui = useUI();
@@ -25,6 +27,51 @@ const groupsView = computed<GroupView[]>(() => {
 
 function groupOf(e: RepoEntry | undefined): string {
 	return e?.group || "";
+}
+
+// ---------- 分组外观（图标 / 图标颜色 / 文字颜色） ----------
+
+const groupMeta = computed<Record<string, GroupInfo>>(() => {
+	const m: Record<string, GroupInfo> = {};
+	for (const g of repos.groups) if (g.name) m[g.name] = g;
+	return m;
+});
+function gIcon(name: string): string {
+	return groupMeta.value[name]?.icon || "";
+}
+function gIconColor(name: string): string {
+	return groupMeta.value[name]?.iconColor || "";
+}
+function gTextColor(name: string): string {
+	return groupMeta.value[name]?.textColor || "";
+}
+
+/** 分组外观就地弹层（锚定在点击位置，无全局弹窗） */
+interface StylePopover {
+	name: string;
+	x: number;
+	y: number;
+	anchor: HTMLElement | null;
+}
+const stylePopover = shallowRef<StylePopover | null>(null);
+function openGroupStyleAt(
+	name: string,
+	x: number,
+	y: number,
+	anchor: HTMLElement | null = null,
+) {
+	const cur = stylePopover.value;
+	if (cur && cur.name === name) {
+		stylePopover.value = null; // 再次触发同一分组：收起
+		return;
+	}
+	stylePopover.value = { name, x, y, anchor };
+}
+/** 从分组图标按钮弹出（锚在按钮右侧） */
+function openGroupStyle(e: MouseEvent, name: string) {
+	const btn = e.currentTarget as HTMLElement;
+	const r = btn.getBoundingClientRect();
+	openGroupStyleAt(name, r.right + 8, r.top, btn);
 }
 
 // 复用 PromptDialog（DialogHost 的 'prompt' kind，带 resolve 回调）
@@ -113,8 +160,14 @@ function repoMenu(e: MouseEvent, path: string) {
 
 function groupMenu(e: MouseEvent, name: string) {
 	e.preventDefault();
+	const { clientX: mx, clientY: my } = e;
 	ui.openMenu(e.clientX, e.clientY, [
 		{ label: "重命名分组…", icon: "edit", action: () => renameGroup(name) },
+		{
+			label: "更换图标与颜色…",
+			icon: "palette",
+			action: () => openGroupStyleAt(name, mx + 4, my + 4),
+		},
 		{
 			label: "解散分组",
 			icon: "x",
@@ -365,13 +418,31 @@ function moveGroupName(
 					:size="12"
 					class="chev"
 				/>
-				<Icon name="folder" :size="13" class="group-icon" />
-				<span class="group-name">{{
-					g.name === "" ? "未分组" : g.name
-				}}</span>
+				<button
+					v-if="g.name !== ''"
+					class="group-icon-btn"
+					title="更换图标与颜色"
+					@click.stop="openGroupStyle($event, g.name)"
+				>
+					<GroupIcon
+						:name="gIcon(g.name)"
+						:size="13"
+						:color="gIconColor(g.name)"
+					/>
+				</button>
+				<Icon v-else name="folder" :size="13" class="group-icon" />
+				<span
+					class="group-name"
+					:style="{ color: gTextColor(g.name) || undefined }"
+					>{{ g.name === "" ? "未分组" : g.name }}</span
+				>
 				<span class="group-count">{{ g.entries.length }}</span>
 			</div>
-			<template v-if="g.name === '' || !repos.collapsedGroups[g.name]">
+			<div
+				v-if="g.name === '' || !repos.collapsedGroups[g.name]"
+				class="group-body"
+				:class="{ nested: g.name !== '' }"
+			>
 				<div
 					v-for="r in g.entries"
 					:key="r.path"
@@ -409,7 +480,7 @@ function moveGroupName(
 					<span class="repo-name">{{ r.name }}</span>
 					<span v-if="r.missing" class="miss-badge">丢失</span>
 				</div>
-			</template>
+			</div>
 		</template>
 		<div
 			v-if="repos.loaded && repos.entries.length === 0"
@@ -417,6 +488,16 @@ function moveGroupName(
 		>
 			还没有仓库，点击 “+” 添加
 		</div>
+
+		<!-- 分组外观就地弹层：改动即时生效 -->
+		<GroupStylePopover
+			v-if="stylePopover"
+			:name="stylePopover.name"
+			:x="stylePopover.x"
+			:y="stylePopover.y"
+			:anchor="stylePopover.anchor"
+			@close="stylePopover = null"
+		/>
 	</div>
 </template>
 
@@ -442,7 +523,8 @@ function moveGroupName(
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 4px 8px;
+	/* 一级项：与仓库行同列（图标按钮落在 --sb-guide 处） */
+	padding: 4px 8px 4px calc(var(--sb-l1) - var(--sb-gutter));
 	margin: 6px 6px 2px;
 	border-radius: 6px;
 	cursor: pointer;
@@ -474,6 +556,36 @@ function moveGroupName(
 	flex: none;
 	color: var(--text-faint);
 }
+/* 可点击的分组图标：悬停提示可更换图标与颜色 */
+.group-icon-btn {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 17px;
+	height: 17px;
+	margin: -2px 0;
+	border-radius: 5px;
+	color: var(--text-faint);
+}
+.group-icon-btn:hover {
+	background: var(--bg-selected);
+	color: var(--text-strong);
+}
+/* 组内仓库容器：树形层级引导线（与分组图标左缘对齐） */
+.group-body.nested {
+	position: relative;
+}
+.group-body.nested::before {
+	content: "";
+	position: absolute;
+	left: var(--sb-guide);
+	top: 1px;
+	bottom: 1px;
+	width: 1px;
+	background: var(--tree-line);
+	pointer-events: none;
+}
 .group-name {
 	flex: 1;
 	min-width: 0;
@@ -491,7 +603,8 @@ function moveGroupName(
 	display: flex;
 	align-items: center;
 	gap: 7px;
-	padding: 5px 10px;
+	/* 一级项：未分组仓库 */
+	padding: 5px 10px 5px calc(var(--sb-l1) - var(--sb-gutter));
 	margin: 0 6px;
 	border-radius: 6px;
 	cursor: pointer;
@@ -499,8 +612,8 @@ function moveGroupName(
 	position: relative;
 }
 .repo-row.in-group {
-	/* 组内仓库：图标与分组标题的文件夹图标对齐（缩进一个 chevron 列宽），形成清晰的层级关系 */
-	padding-left: 26px;
+	/* 二级项：组内仓库在引导线基础上再缩进一级，形成清晰的树形层级 */
+	padding-left: calc(var(--sb-l2) - var(--sb-gutter));
 }
 .repo-row:hover {
 	background: var(--bg-hover);
@@ -537,7 +650,7 @@ function moveGroupName(
 	padding: 0 5px;
 }
 .repo-empty {
-	padding: 6px 14px 10px;
+	padding: 6px 14px 10px var(--sb-l1);
 	font-size: 11.5px;
 	color: var(--text-faint);
 }

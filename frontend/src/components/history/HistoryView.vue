@@ -297,6 +297,9 @@ const unborn = computed(
 .lh-refs {
 	display: flex;
 	align-items: center;
+	/* 覆盖 .lh-cell 的 overflow:hidden：列宽拖拽手柄位于右侧 -6px，
+	   若被裁掉则既看不见也几乎无法命中（只剩内侧 3px）。 */
+	overflow: visible;
 }
 .lh-flex {
 	flex: 1;
@@ -307,7 +310,6 @@ const unborn = computed(
 }
 .lh-time {
 	width: 86px;
-	text-align: right;
 }
 .lh-hash {
 	width: 66px;

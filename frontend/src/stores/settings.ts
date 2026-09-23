@@ -14,6 +14,12 @@ export const ACCENT_PRESETS: AccentPreset[] = [
 	{ key: "orange", label: "活力橙", color: "#f0883e" },
 	{ key: "red", label: "热忱红", color: "#f0554d" },
 	{ key: "teal", label: "湖水青", color: "#39c5cf" },
+	{ key: "indigo", label: "深邃靛", color: "#6366f1" },
+	{ key: "sky", label: "天空蓝", color: "#38bdf8" },
+	{ key: "lime", label: "青柠绿", color: "#84cc16" },
+	{ key: "amber", label: "琥珀黄", color: "#e3b341" },
+	{ key: "pink", label: "樱花粉", color: "#f778ba" },
+	{ key: "slate", label: "石墨灰", color: "#8b949e" },
 ];
 
 export type Appearance = "light" | "dark" | "system";
@@ -33,7 +39,9 @@ function load(): PersistedSettings {
 			const accent =
 				ACCENT_PRESETS.find((a) => a.key === p.accent)?.key || "blue";
 			const appearance: Appearance =
-				p.appearance === "light" || p.appearance === "dark"
+				p.appearance === "light" ||
+				p.appearance === "dark" ||
+				p.appearance === "system"
 					? p.appearance
 					: "dark";
 			return { accent, appearance };
@@ -102,9 +110,10 @@ export const useSettings = defineStore("settings", {
 				"--accent-wash",
 				`rgba(${r}, ${g}, ${b}, 0.08)`,
 			);
+			// 选中底色：亮色下用更低的不透明度，避免在白底上过于饱和
 			root.style.setProperty(
 				"--bg-selected",
-				`rgba(${r}, ${g}, ${b}, 0.27)`,
+				`rgba(${r}, ${g}, ${b}, ${dark ? 0.27 : 0.16})`,
 			);
 		},
 		init() {

@@ -38,6 +38,8 @@ export const useRepo = defineStore("repo", {
 		// history view
 		commits: [] as Commit[],
 		logRef: "all",
+		/** 用户是否手动选择过 ref；未选择时自动跟随当前检出分支 */
+		logRefPinned: false,
 		logSearch: "",
 		logLoading: false,
 		logHasMore: true,
@@ -111,6 +113,13 @@ export const useRepo = defineStore("repo", {
 				this.refreshRefs(),
 				this.refreshStashes(),
 			]);
+			// 用户尚未手动选择 ref 时，默认按当前检出分支过滤历史（而不是「所有分支」）
+			if (!this.logRefPinned && this.refs) {
+				const cur = (this.refs.branches || []).find(
+					(b) => b.isCurrent && !b.isRemote,
+				);
+				if (cur) this.logRef = cur.name;
+			}
 			await this.loadLog(true);
 			// Keep the selection valid after a refresh.
 			if (this.selectedHash) {
@@ -219,6 +228,7 @@ export const useRepo = defineStore("repo", {
 		},
 
 		setLogRef(ref: string) {
+			this.logRefPinned = true;
 			this.logRef = ref;
 			this.loadLog(true);
 		},

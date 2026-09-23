@@ -198,6 +198,22 @@ export interface GitLogEntry {
 export interface GroupInfo {
     "name": string;
     "collapsed": boolean;
+
+    /**
+     * Icon is a lucide icon key (see frontend/src/utils/groupIcons.ts);
+     * "" falls back to the default folder icon.
+     */
+    "icon"?: string;
+
+    /**
+     * IconColor is a CSS color for the group icon; "" inherits the theme color.
+     */
+    "iconColor"?: string;
+
+    /**
+     * TextColor is a CSS color for the group label; "" inherits the theme color.
+     */
+    "textColor"?: string;
 }
 
 /**

@@ -12,6 +12,8 @@
 
 	--border: #31353e;
 	--border-strong: #3d424d;
+	/* 侧边栏树形层级引导线：暗色沿用原 --border 观感 */
+	--tree-line: #31353e;
 
 	--text: #d7dae0;
 	--text-strong: #f2f4f8;
@@ -40,6 +42,13 @@
 	--toolbar-h: 44px;
 	--statusbar-h: 26px;
 	--sidebar-w: 236px;
+
+	/* 侧边栏缩进刻度（单一来源）：一级项 / 二级项 / 树形引导线 / 行左右外边距。
+	   RepoList.vue 与 RefNav.vue 通过 var() 引用，保证各分区层级缩进完全一致。 */
+	--sb-gutter: 6px;
+	--sb-l1: 22px;
+	--sb-l2: 50px;
+	--sb-guide: 40px;
 
 	--font-ui:
 		-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
@@ -77,21 +86,54 @@
 	--chip-tag-bd: #5c5130;
 	--chip-tag-bg: #332c1a;
 
+	/* 投影：几何值直接写进 token，组件用 var() 引用，
+	   亮色主题（下方）覆盖为更柔和、范围更小的投影。 */
+	--shadow-logo: 0 10px 30px rgba(0, 0, 0, 0.4);
+	--shadow-menu: 0 10px 34px rgba(0, 0, 0, 0.55);
+	--shadow-select: 0 12px 40px rgba(0, 0, 0, 0.55);
+	--shadow-tooltip: 0 6px 20px rgba(0, 0, 0, 0.55);
+	--shadow-toast: 0 8px 28px rgba(0, 0, 0, 0.45);
+	--shadow-popover: 0 14px 44px rgba(0, 0, 0, 0.5);
+	--shadow-debug: 0 16px 44px rgba(0, 0, 0, 0.45);
+	--shadow-modal: 0 18px 60px rgba(0, 0, 0, 0.6);
+	--shadow-panel: -14px 0 44px rgba(0, 0, 0, 0.4);
+	/* 当前分支状态点辉光 */
+	--glow-green: rgba(70, 194, 106, 0.7);
+
+	/* 代码高亮（highlight.js）：暗色 = GitHub Dark，亮色 = GitHub Light */
+	--hl-fg: #c9d1d9;
+	--hl-keyword: #ff7b72;
+	--hl-entity: #d2a8ff;
+	--hl-constant: #79c0ff;
+	--hl-string: #a5d6ff;
+	--hl-variable: #ffa657;
+	--hl-comment: #8b949e;
+	--hl-tag: #7ee787;
+	--hl-subst: #c9d1d9;
+	--hl-section: #1f6feb;
+	--hl-bullet: #f2cc60;
+	--hl-add-fg: #aff5b4;
+	--hl-add-bg: #033a16;
+	--hl-del-fg: #ffdcd7;
+	--hl-del-bg: #67060c;
+
 	color-scheme: dark;
 }
 
 /* 亮色主题：仅覆盖颜色 token，布局 token 保持不变 */
 :root[data-theme="light"] {
-	--bg-app: #f2f3f5;
+	--bg-app: #fafbfc;
 	--bg-panel: #ffffff;
-	--bg-panel-2: #f6f7f9;
-	--bg-sidebar: #eceef1;
+	--bg-panel-2: #f2f4f7;
+	--bg-sidebar: #f0f2f5;
 	--bg-input: #ffffff;
-	--bg-hover: rgba(0, 0, 0, 0.05);
+	--bg-hover: rgba(15, 18, 24, 0.055);
 
-	/* 亮色分割线：更浅更柔和，避免线条感过重 */
-	--border: #eaecef;
-	--border-strong: #dcdfe4;
+	/* 亮色分割线：内容底已接近白，分割线需比之前更深一点才清晰、层级分明 */
+	--border: #dfe3e9;
+	--border-strong: #c9d0da;
+	/* 树形引导线：亮色下需比 --border 更实一点才可见 */
+	--tree-line: #c5cdd8;
 
 	--text: #3a3f47;
 	--text-strong: #171a1f;
@@ -114,16 +156,16 @@
 
 	--menu-bg: #ffffff;
 	--tooltip-bg: #ffffff;
-	--term-bg: #fafbfc;
+	--term-bg: #fbfcfd;
 	--overlay-bg: rgba(15, 18, 24, 0.3);
-	--hover-soft: rgba(0, 0, 0, 0.05);
-	--row-border: rgba(0, 0, 0, 0.045);
-	--btn-hover-bg: #e8eaee;
-	--scrollbar-thumb: #c6cad1;
-	--scrollbar-thumb-hover: #aaafb8;
+	--hover-soft: rgba(15, 18, 24, 0.05);
+	--row-border: rgba(15, 18, 24, 0.06);
+	--btn-hover-bg: #e9ecf0;
+	--scrollbar-thumb: #c3c8d0;
+	--scrollbar-thumb-hover: #a6adb8;
 	--red-wash: rgba(207, 34, 46, 0.08);
 	--welcome-grad-a: #ffffff;
-	--welcome-grad-b: #eef1f5;
+	--welcome-grad-b: #e9edf3;
 	--banner-merge-bg: #fff3d6;
 	--banner-rebase-bg: #ddf4ff;
 	--banner-cherry-bg: #f3edff;
@@ -141,6 +183,35 @@
 	--chip-tag-fg: #9a6700;
 	--chip-tag-bd: #e6d9ad;
 	--chip-tag-bg: #fff5da;
+
+	/* 亮色投影：更浅、更小的范围，避免白底上出现厚重的黑色阴影 */
+	--shadow-logo: 0 6px 18px rgba(15, 18, 24, 0.12);
+	--shadow-menu: 0 6px 20px rgba(15, 18, 24, 0.14);
+	--shadow-select: 0 8px 24px rgba(15, 18, 24, 0.14);
+	--shadow-tooltip: 0 3px 10px rgba(15, 18, 24, 0.12);
+	--shadow-toast: 0 6px 18px rgba(15, 18, 24, 0.13);
+	--shadow-popover: 0 8px 24px rgba(15, 18, 24, 0.15);
+	--shadow-debug: 0 10px 28px rgba(15, 18, 24, 0.14);
+	--shadow-modal: 0 12px 36px rgba(15, 18, 24, 0.18);
+	--shadow-panel: -8px 0 28px rgba(15, 18, 24, 0.12);
+	--glow-green: rgba(26, 127, 55, 0.35);
+
+	/* 亮色代码高亮：GitHub Light */
+	--hl-fg: #24292f;
+	--hl-keyword: #cf222e;
+	--hl-entity: #8250df;
+	--hl-constant: #0550ae;
+	--hl-string: #0a3069;
+	--hl-variable: #953800;
+	--hl-comment: #6e7781;
+	--hl-tag: #116329;
+	--hl-subst: #24292f;
+	--hl-section: #0550ae;
+	--hl-bullet: #953800;
+	--hl-add-fg: #116329;
+	--hl-add-bg: #dafbe1;
+	--hl-del-fg: #82071e;
+	--hl-del-bg: #ffebe9;
 
 	color-scheme: light;
 }
@@ -492,4 +563,84 @@ textarea {
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.001ms !important;
 	}
+}
+
+/* ------------------------------------------------- code highlight (hljs) */
+/* 不再固定引用 github-dark.css，改为按主题切换的 token 映射，
+   使亮色模式下 diff / 代码块的语法高亮同样可读。 */
+.hljs {
+	color: var(--hl-fg);
+}
+.hljs-doctag,
+.hljs-keyword,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-variable.language_ {
+	color: var(--hl-keyword);
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
+.hljs-title.function_ {
+	color: var(--hl-entity);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-literal,
+.hljs-meta,
+.hljs-number,
+.hljs-operator,
+.hljs-variable,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id {
+	color: var(--hl-constant);
+}
+.hljs-regexp,
+.hljs-string,
+.hljs-meta .hljs-string {
+	color: var(--hl-string);
+}
+.hljs-built_in,
+.hljs-symbol {
+	color: var(--hl-variable);
+}
+.hljs-comment,
+.hljs-code,
+.hljs-formula {
+	color: var(--hl-comment);
+}
+.hljs-name,
+.hljs-quote,
+.hljs-selector-tag,
+.hljs-selector-pseudo {
+	color: var(--hl-tag);
+}
+.hljs-subst {
+	color: var(--hl-subst);
+}
+.hljs-section {
+	color: var(--hl-section);
+	font-weight: bold;
+}
+.hljs-bullet {
+	color: var(--hl-bullet);
+}
+.hljs-emphasis {
+	color: var(--hl-subst);
+	font-style: italic;
+}
+.hljs-strong {
+	color: var(--hl-subst);
+	font-weight: bold;
+}
+.hljs-addition {
+	color: var(--hl-add-fg);
+	background-color: var(--hl-add-bg);
+}
+.hljs-deletion {
+	color: var(--hl-del-fg);
+	background-color: var(--hl-del-bg);
 }
