@@ -22,6 +22,7 @@ import DialogHost from "./components/dialogs/DialogHost.vue";
 import OpBanner from "./components/common/OpBanner.vue";
 import SettingsPanel from "./components/settings/SettingsPanel.vue";
 import DebugPanel from "./components/common/DebugPanel.vue";
+import CloneProgressPanel from "./components/common/CloneProgressPanel.vue";
 
 const repos = useRepos();
 const ai = useAi();
@@ -141,6 +142,7 @@ onBeforeUnmount(() => repo.unwatch());
 			</div>
 		</div>
 		<TerminalPanel v-if="repos.activePath" />
+		<CloneProgressPanel />
 		<StatusBar />
 		<SettingsPanel />
 		<DebugPanel />

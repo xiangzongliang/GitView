@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -110,7 +111,20 @@ func runGitCtxEnv(ctx context.Context, repoPath string, extraEnv []string, args 
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	return finishGitCmd(ctx, start, repoPath, args, cmd.Run(), &stdout, &stderr)
+}
+
+// finishGitCmd records the finished command in the debug log and converts the
+// run result into the shared (stdout, error) form. git prints progress/info
+// noise on stderr; on failure the first meaningful stderr line becomes the error.
+func finishGitCmd(
+	ctx context.Context,
+	start time.Time,
+	repoPath string,
+	args []string,
+	runErr error,
+	stdout, stderr *bytes.Buffer,
+) (string, error) {
 	out := stdout.String()
 	entry := GitLogEntry{
 		Time:     start.UnixMilli(),
@@ -125,9 +139,8 @@ func runGitCtxEnv(ctx context.Context, repoPath string, extraEnv []string, args 
 		recordCommand(entry)
 		return out, errors.New("git 命令超时: git " + strings.Join(args, " "))
 	}
-	if err != nil {
-		msg := firstNonEmpty(strings.TrimSpace(stderr.String()), strings.TrimSpace(out), err.Error())
-		// git prints progress/info noise on stderr; keep only the first meaningful lines.
+	if runErr != nil {
+		msg := firstNonEmpty(strings.TrimSpace(stderr.String()), strings.TrimSpace(out), runErr.Error())
 		entry.Error = msg
 		recordCommand(entry)
 		return out, errors.New(msg)
@@ -135,6 +148,94 @@ func runGitCtxEnv(ctx context.Context, repoPath string, extraEnv []string, args 
 	entry.OK = true
 	recordCommand(entry)
 	return out, nil
+}
+
+// runGitNetworkStream behaves like runGitNetwork, but additionally streams
+// git's stderr to onChunk while the command runs (git writes progress output
+// to stderr). Used by clone so the frontend can show live progress.
+func runGitNetworkStream(repoPath string, onChunk func(string), args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	markGitCmdStart()
+	defer markGitCmdDone()
+	start := time.Now()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if repoPath != "" {
+		cmd.Dir = repoPath
+	}
+	cmd.Env = gitEnv()
+	cmd.WaitDelay = 5 * time.Second
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	if onChunk != nil {
+		// 完整 stderr 仍照常留档（调试日志 / 错误信息），同时分块推给前端。
+		flusher := newChunkFlusher(onChunk)
+		defer flusher.Close()
+		cmd.Stderr = io.MultiWriter(&stderr, flusher)
+	} else {
+		cmd.Stderr = &stderr
+	}
+
+	return finishGitCmd(ctx, start, repoPath, args, cmd.Run(), &stdout, &stderr)
+}
+
+// chunkFlusher collects writes and periodically flushes them to a callback, so
+// a chatty progress stream (git --progress redraws a line many times a second)
+// doesn't flood the frontend with one event per write.
+type chunkFlusher struct {
+	mu   sync.Mutex
+	buf  []byte
+	on   func(string)
+	stop chan struct{}
+	done chan struct{}
+}
+
+func newChunkFlusher(on func(string)) *chunkFlusher {
+	f := &chunkFlusher{on: on, stop: make(chan struct{}), done: make(chan struct{})}
+	go f.loop()
+	return f
+}
+
+func (f *chunkFlusher) Write(p []byte) (int, error) {
+	f.mu.Lock()
+	f.buf = append(f.buf, p...)
+	f.mu.Unlock()
+	return len(p), nil
+}
+
+func (f *chunkFlusher) loop() {
+	defer close(f.done)
+	t := time.NewTicker(80 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			f.drain()
+		case <-f.stop:
+			f.drain()
+			return
+		}
+	}
+}
+
+func (f *chunkFlusher) drain() {
+	f.mu.Lock()
+	if len(f.buf) == 0 {
+		f.mu.Unlock()
+		return
+	}
+	chunk := string(f.buf)
+	f.buf = nil
+	f.mu.Unlock()
+	f.on(chunk)
+}
+
+// Close stops the background flusher after emitting any pending output.
+func (f *chunkFlusher) Close() {
+	close(f.stop)
+	<-f.done
 }
 
 func firstNonEmpty(vals ...string) string {

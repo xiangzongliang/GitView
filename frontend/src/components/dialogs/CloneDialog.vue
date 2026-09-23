@@ -119,9 +119,11 @@ async function browse() {
 	if (dir) parent.value = dir;
 }
 
-async function submit() {
-	if (!valid.value || ui.opRunning) return;
-	const entry = await repos.clone({
+function submit() {
+	if (!valid.value || ui.busy) return;
+	// 先关闭弹窗，克隆在后台进行；进度与输出实时展示在底部进度面板。
+	emit("close");
+	void repos.clone({
 		url: url.value.trim(),
 		parent: parent.value.trim(),
 		name: name.value.trim(),
@@ -129,7 +131,6 @@ async function submit() {
 		username: username.value.trim(),
 		password: password.value,
 	});
-	if (entry) emit("close");
 }
 </script>
 
@@ -256,7 +257,7 @@ async function submit() {
 			<button class="btn" @click="emit('close')">取消</button>
 			<button
 				class="btn btn-primary"
-				:disabled="!valid || !!ui.opRunning"
+				:disabled="!valid || ui.busy"
 				@click="submit"
 			>
 				<Icon name="cloud" :size="13" /> 开始克隆

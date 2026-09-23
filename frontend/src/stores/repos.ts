@@ -1,6 +1,17 @@
 import { defineStore } from "pinia";
-import { RepoService, pickDirectory, errMsg } from "../api";
-import type { RepoEntry, GroupInfo, CloneOptions } from "../api";
+import {
+	RepoService,
+	pickDirectory,
+	errMsg,
+	Events,
+	CLONE_PROGRESS_EVENT,
+} from "../api";
+import type {
+	RepoEntry,
+	GroupInfo,
+	CloneOptions,
+	CloneProgressPayload,
+} from "../api";
 import { useUI } from "./ui";
 
 export interface RepoGroup {
@@ -12,6 +23,13 @@ export interface RepoGroup {
 /** 布局写盘去抖定时器（就地编辑分组外观时避免每次点击都写盘） */
 let layoutSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** 克隆目标路径的展示文本（与后端 expandHome/nameFromURL 的推导保持一致即可，仅用于展示） */
+function cloneTargetText(opts: CloneOptions): string {
+	const parent = (opts.parent || "~").replace(/\/+$/, "");
+	const name = (opts.name || "").trim();
+	return name ? parent + "/" + name : parent;
+}
+
 export const useRepos = defineStore("repos", {
 	state: () => ({
 		entries: [] as RepoEntry[],
@@ -19,6 +37,16 @@ export const useRepos = defineStore("repos", {
 		loaded: false,
 		/** 分组元数据（顺序 = 显示顺序；含折叠状态，空分组也保留） */
 		groups: [] as GroupInfo[],
+		/** 克隆日志（按行；含 \r 覆盖语义，见 appendCloneLog） */
+		cloneLog: [] as string[],
+		/** 克隆是否正在进行 */
+		cloneRunning: false,
+		/** 克隆失败时的错误信息（空串 = 无错误） */
+		cloneError: "",
+		/** 克隆目标（显示用，如 ~/Code/repo） */
+		cloneTarget: "",
+		/** 底部克隆进度面板是否显示 */
+		cloneVisible: false,
 	}),
 	getters: {
 		active(s): RepoEntry | null {
@@ -244,22 +272,64 @@ export const useRepos = defineStore("repos", {
 		async clone(opts: CloneOptions): Promise<RepoEntry | null> {
 			const ui = useUI();
 			if (!ui.beginOp("clone", "正在克隆仓库…")) return null;
+			this.cloneLog = [];
+			this.cloneError = "";
+			this.cloneRunning = true;
+			this.cloneVisible = true;
+			this.cloneTarget = cloneTargetText(opts);
+			const off = Events.On(
+				CLONE_PROGRESS_EVENT,
+				(ev: { data?: unknown }) => {
+					const data = (ev.data || {}) as CloneProgressPayload;
+					if (data.output) this.appendCloneLog(data.output);
+				},
+			);
 			try {
 				const entry = await RepoService.Clone(opts);
 				if (!entry) {
-					ui.error("克隆失败", "后端未返回仓库信息");
+					this.cloneError = "后端未返回仓库信息";
+					ui.error("克隆失败", this.cloneError);
 					return null;
 				}
+				this.appendCloneLog("\n已克隆到 " + entry.path);
 				await this.load();
 				this.activePath = entry.path;
 				ui.success("克隆完成", entry.path);
 				return entry;
 			} catch (e) {
-				ui.error("克隆失败", errMsg(e));
+				this.cloneError = errMsg(e);
+				ui.error("克隆失败", this.cloneError);
 				return null;
 			} finally {
+				this.cloneRunning = false;
+				off();
 				ui.endOp();
 			}
+		},
+		/** 追加克隆日志片段：\n 换行，\r 表示回车覆盖当前行（git 进度条语义） */
+		appendCloneLog(chunk: string) {
+			const lines = this.cloneLog;
+			for (const ch of chunk) {
+				if (ch === "\n") {
+					lines.push("");
+				} else if (ch === "\r") {
+					if (lines.length) lines[lines.length - 1] = "";
+				} else {
+					if (!lines.length) lines.push("");
+					lines[lines.length - 1] += ch;
+				}
+			}
+			// 防止极端情况下无限增长（保留最近的行）
+			if (lines.length > 400) this.cloneLog = lines.slice(-400);
+		},
+		/** 清空克隆日志 */
+		clearCloneLog() {
+			this.cloneLog = [];
+			this.cloneError = "";
+		},
+		/** 关闭底部克隆进度面板 */
+		hideClonePanel() {
+			this.cloneVisible = false;
 		},
 		async initRepo(dir: string): Promise<RepoEntry | null> {
 			const ui = useUI();

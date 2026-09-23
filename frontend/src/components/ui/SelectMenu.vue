@@ -276,10 +276,13 @@ onBeforeUnmount(detach);
 	background: transparent;
 }
 .sm-label {
+	/* 占满剩余宽度，使箭头始终贴在触发器右端（全宽触发器尤其明显） */
+	flex: 1 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	text-align: left;
 }
 .sm-label.placeholder {
 	color: var(--text-faint);

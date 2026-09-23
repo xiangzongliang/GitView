@@ -101,6 +101,14 @@ export interface AiErrorPayload {
 	message: string;
 }
 
+/** 克隆进度事件（见 gitView/reposervice.go 的 emitCloneProgress） */
+export const CLONE_PROGRESS_EVENT = "clone:progress";
+
+/** clone:progress 负载：git 输出的原始片段（可能含 \r 进度条覆盖语义） */
+export interface CloneProgressPayload {
+	output: string;
+}
+
 /** repo:changed 事件负载 */
 export interface RepoChange {
 	repoPath?: string;

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // RepoService manages the set of repositories known to the app and persists
@@ -324,10 +326,25 @@ func (s *RepoService) Clone(opts CloneOptions) (*RepoEntry, error) {
 		args = append(args, "-b", strings.TrimSpace(opts.Branch))
 	}
 	args = append(args, "--", url, target)
-	if _, err := runGitNetwork("", args...); err != nil {
+	if _, err := runGitNetworkStream("", emitCloneProgress, args...); err != nil {
 		return nil, err
 	}
 	return s.OpenRepo(target)
+}
+
+// cloneProgressEvent：克隆过程中把 git 的进度/日志实时推送给前端。
+const cloneProgressEvent = "clone:progress"
+
+// CloneProgressEvent 是 clone:progress 的负载：Output 为 git stderr 的原始
+// 片段（git 的进度输出带 \r 回车覆盖语义），由前端按行渲染。
+type CloneProgressEvent struct {
+	Output string `json:"output"`
+}
+
+func emitCloneProgress(chunk string) {
+	if app := application.Get(); app != nil && app.Event != nil {
+		app.Event.Emit(cloneProgressEvent, CloneProgressEvent{Output: redactSecrets(chunk)})
+	}
 }
 
 // Init creates a new git repository in dir and registers it.
