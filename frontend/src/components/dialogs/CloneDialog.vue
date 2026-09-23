@@ -22,6 +22,7 @@ const nameTouched = ref(false);
 const username = ref("");
 const password = ref("");
 const authOpen = ref(false);
+const showPassword = ref(false);
 const hasCreds = computed(() => !!(username.value.trim() || password.value));
 
 // 远程分支拉取
@@ -222,12 +223,27 @@ async function submit() {
 				</label>
 				<label class="field">
 					<span class="label">密码 / Token</span>
-					<input
-						v-model="password"
-						type="password"
-						autocomplete="new-password"
-						placeholder="••••••••"
-					/>
+					<div class="pw-wrap">
+						<input
+							v-model="password"
+							:type="showPassword ? 'text' : 'password'"
+							autocomplete="new-password"
+							placeholder="••••••••"
+						/>
+						<button
+							class="pw-toggle"
+							type="button"
+							:title="showPassword ? '隐藏密码' : '显示密码'"
+							:aria-label="showPassword ? '隐藏密码' : '显示密码'"
+							:aria-pressed="showPassword"
+							@click="showPassword = !showPassword"
+						>
+							<Icon
+								:name="showPassword ? 'eye-off' : 'eye'"
+								:size="14"
+							/>
+						</button>
+					</div>
 				</label>
 			</div>
 		</div>
@@ -270,6 +286,34 @@ async function submit() {
 }
 .with-btn .btn {
 	flex: none;
+}
+/* 密码框：右侧内嵌“显示/隐藏”按钮 */
+.pw-wrap {
+	position: relative;
+	display: flex;
+}
+.pw-wrap input {
+	flex: 1;
+	min-width: 0;
+	padding-right: 30px;
+}
+.pw-toggle {
+	position: absolute;
+	right: 3px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 24px;
+	height: 24px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 5px;
+	color: var(--text-faint);
+	background: none;
+}
+.pw-toggle:hover {
+	color: var(--text-strong);
+	background: var(--bg-hover);
 }
 .row2 {
 	display: grid;
