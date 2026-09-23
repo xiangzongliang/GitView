@@ -10,6 +10,7 @@ import PullDialog from './PullDialog.vue'
 import StashDialog from './StashDialog.vue'
 import ResetDialog from './ResetDialog.vue'
 import TagDialog from './TagDialog.vue'
+import AiCommitDialog from '../ai/AiCommitDialog.vue'
 
 const ui = useUI()
 </script>
@@ -26,5 +27,6 @@ const ui = useUI()
     <StashDialog v-else-if="ui.dialog.kind === 'stash'" @close="ui.closeDialog()" />
     <ResetDialog v-else-if="ui.dialog.kind === 'reset'" :payload="ui.dialog.payload" @close="ui.closeDialog()" />
     <TagDialog v-else-if="ui.dialog.kind === 'tag'" :payload="ui.dialog.payload" @close="ui.closeDialog()" />
+    <AiCommitDialog v-else-if="ui.dialog.kind === 'ai-commit'" :payload="ui.dialog.payload" @close="ui.closeDialog()" />
   </template>
 </template>

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // 设置 · AI 模型：一个 Base URL / API Key 对应一组模型，可配置多组。
-// 配置名称可自行修改，信息保存在应用配置文件（config.json）中。
+// 配置信息保存在应用配置文件（config.json）中，模型名称为空的条目不会写入。
 import { onBeforeUnmount, ref, watch } from "vue";
 import { useAi } from "../../stores/ai";
-import type { AiProvider } from "../../api";
+import type { AiConfig } from "../../stores/ai";
 import { useUI } from "../../stores/ui";
 import Icon from "../ui/Icon.vue";
 
@@ -31,16 +31,16 @@ function addProvider() {
 	ai.addProvider();
 }
 
-function removeProvider(p: AiProvider) {
+function removeProvider(p: AiConfig) {
 	ai.removeProvider(p.id);
 	ui.success("已删除配置", p.title || "未命名配置");
 }
 
-function addModel(p: AiProvider) {
+function addModel(p: AiConfig) {
 	ai.addModel(p.id);
 }
 
-function removeModel(p: AiProvider, index: number) {
+function removeModel(p: AiConfig, index: number) {
 	ai.removeModel(p.id, index);
 }
 </script>
@@ -57,15 +57,9 @@ function removeModel(p: AiProvider, index: number) {
 		</div>
 
 		<div v-else class="ai-list">
-			<div v-for="p in ai.providers" :key="p.id" class="ai-provider">
+			<div v-for="(p, pi) in ai.providers" :key="p.id" class="ai-provider">
 				<div class="ai-provider-head">
-					<input
-						v-model="p.title"
-						class="ai-name"
-						type="text"
-						spellcheck="false"
-						placeholder="配置名称，如 OpenAI / DeepSeek"
-					/>
+					<span class="ai-provider-title">配置 {{ pi + 1 }}</span>
 					<button
 						class="btn-icon"
 						title="删除该配置"
@@ -74,6 +68,16 @@ function removeModel(p: AiProvider, index: number) {
 						<Icon name="trash" :size="13" />
 					</button>
 				</div>
+
+				<label class="ai-field">
+					<span class="ai-label">名称</span>
+					<input
+						v-model="p.title"
+						type="text"
+						spellcheck="false"
+						placeholder="如 OpenAI / DeepSeek"
+					/>
+				</label>
 
 				<label class="ai-field">
 					<span class="ai-label">Base URL</span>
@@ -96,7 +100,7 @@ function removeModel(p: AiProvider, index: number) {
 							placeholder="sk-..."
 						/>
 						<button
-							class="btn-icon ai-key-toggle"
+							class="btn-icon"
 							:title="revealed[p.id] ? '隐藏' : '显示'"
 							@click="toggleReveal(p.id)"
 						>
@@ -163,44 +167,33 @@ function removeModel(p: AiProvider, index: number) {
 	border-radius: 9px;
 }
 
-/* 每组配置：标题行 + 字段，组间用分割线区分（不再使用卡片） */
+/* 每个配置块：小标题行 + 字段；块之间用分割线区分 */
 .ai-provider + .ai-provider {
-	margin-top: 18px;
-	padding-top: 18px;
+	margin-top: 16px;
+	padding-top: 16px;
 	border-top: 1px solid var(--border);
 }
-
-/* 配置名称：无框标题观感，hover / focus 时才显现输入框。
-   margin-left 抵消输入框内边距，使名称与下方标签左对齐。 */
 .ai-provider-head {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	margin-bottom: 8px;
 }
-.ai-name {
+.ai-provider-title {
 	flex: 1;
 	min-width: 0;
-	margin-left: -8px;
-	padding: 4px 8px;
-	background: transparent;
-	border-color: transparent;
-	font-size: 13px;
+	font-size: 12px;
 	font-weight: 600;
-	color: var(--text-strong);
-}
-.ai-name:hover:not(:focus) {
-	border-color: var(--border-strong);
-}
-.ai-name::placeholder {
-	font-weight: 400;
+	letter-spacing: 0.02em;
+	color: var(--text-dim);
 }
 
-/* 标签列宽度与 Git 配置页保持一致，保证各设置页标题左对齐 */
+/* 字段网格：标签 / 输入 / 操作按钮。
+   操作列固定预留，保证各行输入框等宽、右边缘齐平（不因某个字段有按钮而错位）。 */
 .ai-field {
 	display: grid;
-	grid-template-columns: 84px 1fr;
-	gap: 8px 10px;
+	grid-template-columns: 84px minmax(0, 1fr) 26px;
+	column-gap: 8px;
 	align-items: center;
 	margin-bottom: 8px;
 }
@@ -213,44 +206,47 @@ function removeModel(p: AiProvider, index: number) {
 	color: var(--text);
 }
 .ai-field-top .ai-label {
-	padding-top: 6px;
+	padding-top: 5px;
 }
 .ai-field > input {
 	grid-column: 2;
 	width: 100%;
+	min-width: 0;
 }
 /* 组内最后一个字段不留底部外边距，使分割线上下间距对称 */
 .ai-provider > .ai-field:last-child {
 	margin-bottom: 0;
 }
 
-/* API Key / 模型：图标按钮内嵌在输入框右侧，保证各行输入框等宽、右边缘齐平 */
+/* API Key：输入框 + 显示/隐藏按钮（跨到操作列，内部按同样列宽排布） */
 .ai-key {
-	position: relative;
-	grid-column: 2;
+	grid-column: 2 / 4;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 26px;
+	column-gap: 8px;
+	align-items: center;
 }
-.ai-key input,
-.ai-model-row input {
+.ai-key input {
 	width: 100%;
-	padding-right: 30px;
-}
-.ai-key .btn-icon,
-.ai-model-row .btn-icon {
-	position: absolute;
-	right: 2px;
-	top: 50%;
-	transform: translateY(-50%);
+	min-width: 0;
 }
 
-/* 模型列表 */
+/* 模型列表：与输入列等宽（同样跨到操作列），每行 = 输入框 + 删除按钮 */
 .ai-models {
-	grid-column: 2;
+	grid-column: 2 / 4;
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 }
 .ai-model-row {
-	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 26px;
+	column-gap: 8px;
+	align-items: center;
+}
+.ai-model-row input {
+	width: 100%;
+	min-width: 0;
 }
 .ai-add-model {
 	align-self: flex-start;
@@ -266,8 +262,8 @@ function removeModel(p: AiProvider, index: number) {
 }
 /* 已有配置时，配置列表与「添加配置」之间用分割线分开 */
 .ai-list + .ai-actions {
-	margin-top: 18px;
-	padding-top: 18px;
+	margin-top: 16px;
+	padding-top: 16px;
 	border-top: 1px solid var(--border);
 }
 </style>

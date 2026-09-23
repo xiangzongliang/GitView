@@ -9,7 +9,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -19,66 +19,61 @@ import * as $models from "./models.js";
  * Clone clones a remote repository and registers it.
  */
 export function Clone(opts: $models.CloneOptions): $CancellablePromise<$models.RepoEntry | null> {
-    return $Call.ByID(3488793038, opts).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(3488793038, opts);
+}
+
+/**
+ * GetAiCommitPrefix returns the AI commit-message prefix saved for a repo.
+ * nil 表示该项目从未配置过（前端据此使用默认前缀）；
+ * 非 nil 的空字符串表示用户显式选择了「不加前缀」。
+ */
+export function GetAiCommitPrefix(repoPath: string): $CancellablePromise<string | null> {
+    return $Call.ByID(654409176, repoPath);
 }
 
 /**
  * Init creates a new git repository in dir and registers it.
  */
 export function Init(dir: string): $CancellablePromise<$models.RepoEntry | null> {
-    return $Call.ByID(1958060199, dir).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(1958060199, dir);
 }
 
 /**
  * ListAiProviders returns the AI model service configurations stored in the
  * app config file, in stored order.
  */
-export function ListAiProviders(): $CancellablePromise<$models.AiProvider[]> {
-    return $Call.ByID(2379538247).then(($result: any) => {
-        return $$createType3($result);
-    });
+export function ListAiProviders(): $CancellablePromise<$models.AiProvider[] | null> {
+    return $Call.ByID(2379538247);
 }
 
 /**
  * ListGroups returns persisted groups in display order (empty groups included).
  */
-export function ListGroups(): $CancellablePromise<$models.GroupInfo[]> {
-    return $Call.ByID(112148621).then(($result: any) => {
-        return $$createType5($result);
-    });
+export function ListGroups(): $CancellablePromise<$models.GroupInfo[] | null> {
+    return $Call.ByID(112148621);
 }
 
 /**
  * ListRepos returns all registered repositories in stored order.
  * The order is user-managed (drag & drop) and persisted via SaveLayout.
  */
-export function ListRepos(): $CancellablePromise<$models.RepoEntry[]> {
-    return $Call.ByID(4136257610).then(($result: any) => {
-        return $$createType6($result);
-    });
+export function ListRepos(): $CancellablePromise<$models.RepoEntry[] | null> {
+    return $Call.ByID(4136257610);
 }
 
 /**
  * OpenRepo validates a path, resolves it to the repository root and registers it.
  */
 export function OpenRepo(path: string): $CancellablePromise<$models.RepoEntry | null> {
-    return $Call.ByID(2613186397, path).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(2613186397, path);
 }
 
 /**
  * RemoteBranches lists the heads of a remote repository without cloning it.
  * It is used by the clone dialog to offer a branch picker.
  */
-export function RemoteBranches(url: string, username: string, password: string): $CancellablePromise<string[]> {
-    return $Call.ByID(3477622215, url, username, password).then(($result: any) => {
-        return $$createType7($result);
-    });
+export function RemoteBranches(url: string, username: string, password: string): $CancellablePromise<string[] | null> {
+    return $Call.ByID(3477622215, url, username, password);
 }
 
 /**
@@ -99,7 +94,7 @@ export function RevealInFinder(path: string): $CancellablePromise<void> {
  * SaveAiProviders replaces the stored AI model service configurations with
  * the provided list (saved exactly as given by the frontend).
  */
-export function SaveAiProviders(providers: $models.AiProvider[]): $CancellablePromise<void> {
+export function SaveAiProviders(providers: $models.AiProvider[] | null): $CancellablePromise<void> {
     return $Call.ByID(3698877036, providers);
 }
 
@@ -107,16 +102,14 @@ export function SaveAiProviders(providers: $models.AiProvider[]): $CancellablePr
  * SaveLayout persists the repository order/group assignments and the group
  * list (order + collapsed state) exactly as provided by the frontend.
  */
-export function SaveLayout(entries: $models.RepoEntry[], groups: $models.GroupInfo[]): $CancellablePromise<void> {
+export function SaveLayout(entries: $models.RepoEntry[] | null, groups: $models.GroupInfo[] | null): $CancellablePromise<void> {
     return $Call.ByID(2693767170, entries, groups);
 }
 
-// Private type creation functions
-const $$createType0 = $models.RepoEntry.createFrom;
-const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = $models.AiProvider.createFrom;
-const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = $models.GroupInfo.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $Create.Array($$createType0);
-const $$createType7 = $Create.Array($Create.Any);
+/**
+ * SetAiCommitPrefix saves the AI commit-message prefix for a repo.
+ * An empty prefix removes the entry (so the config stays free of empty keys).
+ */
+export function SetAiCommitPrefix(repoPath: string, prefix: string): $CancellablePromise<void> {
+    return $Call.ByID(2181359452, repoPath, prefix);
+}

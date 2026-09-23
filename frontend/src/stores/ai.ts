@@ -8,6 +8,20 @@ import type { AiProvider } from "../api";
  * 旧版本数据存于 localStorage，首次加载时自动迁移到 config.json。
  */
 
+/**
+ * 应用内使用的 AI 配置类型。
+ * 绑定生成的 AiProvider.models 允许为 null（后端结构体是切片），
+ * 这里统一归一为数组，模板与分组逻辑就不必到处判空。
+ * AiConfig 可直接当作 AiProvider 传给后端（结构上兼容）。
+ */
+export interface AiConfig {
+	id: string;
+	title: string;
+	baseUrl: string;
+	apiKey: string;
+	models: string[];
+}
+
 // 旧版存储键：仅用于一次性迁移，不再写入。
 const LEGACY_KEY = "gv.ai-models";
 
@@ -35,10 +49,10 @@ function modelList(v: unknown): string[] {
 		.filter((m) => m !== "");
 }
 
-function normalize(raw: unknown): AiProvider | null {
+function normalize(raw: unknown): AiConfig | null {
 	if (!raw || typeof raw !== "object") return null;
 	const p = raw as Record<string, unknown>;
-	const provider: AiProvider = {
+	const provider: AiConfig = {
 		id: str(p.id) || uid(),
 		// 兼容旧结构（单模型）：旧的 name 字段作为标题
 		title: str(p.title) || str(p.name),
@@ -59,20 +73,20 @@ function normalize(raw: unknown): AiProvider | null {
 }
 
 /** 读取旧版 localStorage 数据（迁移用）。 */
-function loadLegacy(): AiProvider[] {
+function loadLegacy(): AiConfig[] {
 	try {
 		const raw = localStorage.getItem(LEGACY_KEY);
 		if (!raw) return [];
 		const parsed = JSON.parse(raw);
 		if (!Array.isArray(parsed)) return [];
-		return parsed.map(normalize).filter((p): p is AiProvider => p !== null);
+		return parsed.map(normalize).filter((p): p is AiConfig => p !== null);
 	} catch {
 		return [];
 	}
 }
 
 /** 写盘前的整理：只保留有意义的字段，模型名称为空的不写入。 */
-function toSave(providers: AiProvider[]): AiProvider[] {
+function toSave(providers: AiConfig[]): AiProvider[] {
 	return providers.map((p) => ({
 		id: p.id,
 		title: p.title,
@@ -84,7 +98,7 @@ function toSave(providers: AiProvider[]): AiProvider[] {
 
 export const useAi = defineStore("ai", {
 	state: () => ({
-		providers: [] as AiProvider[],
+		providers: [] as AiConfig[],
 		loaded: false,
 	}),
 	actions: {
@@ -92,12 +106,12 @@ export const useAi = defineStore("ai", {
 		async load() {
 			if (this.loaded) return;
 			this.loaded = true;
-			let providers: AiProvider[] = [];
+			let providers: AiConfig[] = [];
 			try {
 				const res = await RepoService.ListAiProviders();
 				providers = (res ?? [])
 					.map(normalize)
-					.filter((p): p is AiProvider => p !== null);
+					.filter((p): p is AiConfig => p !== null);
 			} catch (e) {
 				console.error("读取 AI 模型配置失败", errMsg(e));
 			}
@@ -133,8 +147,8 @@ export const useAi = defineStore("ai", {
 				console.error("保存 AI 模型配置失败", errMsg(e));
 			}
 		},
-		addProvider(partial?: Partial<Omit<AiProvider, "id">>): AiProvider {
-			const provider: AiProvider = {
+		addProvider(partial?: Partial<Omit<AiConfig, "id">>): AiConfig {
+			const provider: AiConfig = {
 				id: uid(),
 				title: partial?.title ?? "",
 				baseUrl: partial?.baseUrl ?? "",

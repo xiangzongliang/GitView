@@ -20,6 +20,11 @@ const props = withDefaults(
 		icon?: string;
 		/** stretch trigger to fill the parent width (dialogs) */
 		fullWidth?: boolean;
+		/**
+		 * 无边框样式：用于已嵌入容器（如输入框底部工具条）的场景，
+		 * 此时由外部的分割线来界定范围，字体也略小、hover 不做背景反馈。
+		 */
+		flat?: boolean;
 	}>(),
 	{
 		placeholder: "请选择…",
@@ -27,6 +32,7 @@ const props = withDefaults(
 		disabled: false,
 		minWidth: 0,
 		fullWidth: false,
+		flat: false,
 	},
 );
 const emit = defineEmits<{ (e: "update:modelValue", v: string): void }>();
@@ -149,7 +155,7 @@ onBeforeUnmount(detach);
 </script>
 
 <template>
-	<div class="selectmenu" :class="{ disabled, full: fullWidth }">
+	<div class="selectmenu" :class="{ disabled, full: fullWidth, flat }">
 		<button
 			ref="trigger"
 			type="button"
@@ -247,6 +253,27 @@ onBeforeUnmount(detach);
 .sm-trigger-icon {
 	flex: none;
 	color: var(--text-faint);
+}
+/* 无边框样式：用于已嵌入容器（如输入框底部工具条）的场景，
+   此时由外部的分割线来界定范围，字体也略小。
+   hover 不做背景反馈（嵌入工具条时避免噪声）；展开态才用极浅底色标识。 */
+.selectmenu.flat .sm-trigger {
+	border-color: transparent;
+	background: transparent;
+	border-radius: 4px;
+	font-size: 11.5px;
+}
+.selectmenu.flat .sm-trigger:hover:not(:disabled) {
+	border-color: transparent;
+	background: transparent;
+}
+.selectmenu.flat .sm-trigger.open {
+	border-color: transparent;
+	background: var(--bg-hover);
+	box-shadow: none;
+}
+.selectmenu.flat .sm-trigger:disabled {
+	background: transparent;
 }
 .sm-label {
 	min-width: 0;

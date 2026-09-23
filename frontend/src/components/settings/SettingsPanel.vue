@@ -5,7 +5,7 @@
 //   - GitConfigSettings.vue   Git 配置（全局 git config）
 //   - AiModelsSettings.vue    AI 模型（Base URL / API Key）
 //   - AboutSettings.vue       关于（版本信息 + 软件更新）
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useUI } from "../../stores/ui";
 import Icon from "../ui/Icon.vue";
 import AppearanceSettings from "./AppearanceSettings.vue";
@@ -77,6 +77,18 @@ function onKey(e: KeyboardEvent) {
 		ui.closeSettings();
 	}
 }
+
+// 支持从外部（如「AI 补充」未配置模型时）直接打开到指定功能页。
+watch(
+	() => ui.settingsOpen,
+	(open) => {
+		const want = ui.settingsTab;
+		if (open && want && TABS.some((t) => t.key === want)) {
+			tab.value = want as Tab;
+		}
+	},
+);
+
 onMounted(() => {
 	window.addEventListener("resize", onViewportResize);
 	document.addEventListener("keydown", onKey);

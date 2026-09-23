@@ -12,15 +12,18 @@ var assets embed.FS
 
 func main() {
 	updateService := NewUpdateService()
+	// RepoService 同时供 AI 服务读取 config.json 中的模型配置。
+	repoService := &RepoService{}
 
 	app := application.New(application.Options{
 		Name:        "Git View",
 		Description: "Git View - a modern Git desktop client built with Wails v3",
 		Services: []application.Service{
 			application.NewService(&GitService{}),
-			application.NewService(&RepoService{}),
+			application.NewService(repoService),
 			application.NewService(&AppService{}),
 			application.NewService(updateService),
+			application.NewService(NewAiService(repoService)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

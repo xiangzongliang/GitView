@@ -40,6 +40,11 @@ export const useUI = defineStore("ui", {
 		debugOpen: false,
 		/** settings slide-over panel visibility (not a modal dialog) */
 		settingsOpen: false,
+		/**
+		 * 打开设置时要选中的功能页 key（见 SettingsPanel 的 TABS）。
+		 * null 表示沿用上次停留的页面。
+		 */
+		settingsTab: null as string | null,
 		/** sidebar width in px (drag the divider to change; min/max clamped in App) */
 		sidebarWidth: Number(localStorage.getItem("gv.sidebarW")) || 236,
 	}),
@@ -112,11 +117,13 @@ export const useUI = defineStore("ui", {
 		isOp(key: string): boolean {
 			return this.op?.key === key;
 		},
-		openSettings() {
+		openSettings(tab?: string) {
+			this.settingsTab = tab || null;
 			this.settingsOpen = true;
 		},
 		closeSettings() {
 			this.settingsOpen = false;
+			this.settingsTab = null;
 		},
 		setSidebarWidth(w: number) {
 			const max = Math.max(200, Math.round(window.innerWidth * 0.4));

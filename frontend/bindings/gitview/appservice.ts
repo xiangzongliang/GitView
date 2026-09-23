@@ -9,7 +9,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -32,10 +32,8 @@ export function ClearGitLog(): $CancellablePromise<void> {
 /**
  * GitLog returns the recorded command log entries newer than since.
  */
-export function GitLog(since: number): $CancellablePromise<$models.GitLogEntry[]> {
-    return $Call.ByID(2576985120, since).then(($result: any) => {
-        return $$createType1($result);
-    });
+export function GitLog(since: number): $CancellablePromise<$models.GitLogEntry[] | null> {
+    return $Call.ByID(2576985120, since);
 }
 
 /**
@@ -53,7 +51,3 @@ export function GitVersion(): $CancellablePromise<string> {
 export function Version(): $CancellablePromise<string> {
     return $Call.ByID(1828333558);
 }
-
-// Private type creation functions
-const $$createType0 = $models.GitLogEntry.createFrom;
-const $$createType1 = $Create.Array($$createType0);

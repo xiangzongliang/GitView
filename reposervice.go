@@ -25,6 +25,9 @@ type appConfig struct {
 	Repos       []RepoEntry  `json:"repos"`
 	Groups      []GroupInfo  `json:"groups,omitempty"`
 	AiProviders []AiProvider `json:"aiProviders,omitempty"`
+	// CommitPrefixes 按仓库路径保存「AI 生成提交信息」使用的前缀
+	// （如 "feat: " / "AI："）。只存非空值，key 为仓库根目录路径。
+	CommitPrefixes map[string]string `json:"commitPrefixes,omitempty"`
 }
 
 func configFilePath() (string, error) {
@@ -401,5 +404,45 @@ func (s *RepoService) SaveAiProviders(providers []AiProvider) error {
 		providers = []AiProvider{}
 	}
 	cfg.AiProviders = providers
+	return s.save(cfg)
+}
+
+// GetAiCommitPrefix returns the AI commit-message prefix saved for a repo.
+// nil 表示该项目从未配置过（前端据此使用默认前缀）；
+// 非 nil 的空字符串表示用户显式选择了「不加前缀」。
+func (s *RepoService) GetAiCommitPrefix(repoPath string) (*string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := cfg.CommitPrefixes[repoPath]; ok {
+		return &v, nil
+	}
+	return nil, nil
+}
+
+// SetAiCommitPrefix saves the AI commit-message prefix for a repo.
+// An empty prefix removes the entry (so the config stays free of empty keys).
+func (s *RepoService) SetAiCommitPrefix(repoPath string, prefix string) error {
+	if strings.TrimSpace(repoPath) == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.load()
+	if err != nil {
+		return err
+	}
+	if prefix == "" {
+		// delete on a nil map is a no-op, so no nil check is needed here.
+		delete(cfg.CommitPrefixes, repoPath)
+	} else {
+		if cfg.CommitPrefixes == nil {
+			cfg.CommitPrefixes = map[string]string{}
+		}
+		cfg.CommitPrefixes[repoPath] = prefix
+	}
 	return s.save(cfg)
 }

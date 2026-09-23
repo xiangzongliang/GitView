@@ -4,15 +4,25 @@ import {
 	RepoService,
 	AppService,
 	UpdateService,
+	AiService,
 } from "../../bindings/gitview";
 import { Dialogs, Clipboard, Events } from "@wailsio/runtime";
 
-export { GitService, RepoService, AppService, UpdateService, Events };
+export {
+	GitService,
+	RepoService,
+	AppService,
+	UpdateService,
+	AiService,
+	Events,
+};
 
 export type {
 	AiProvider,
 	BranchInfo,
 	BranchOptions,
+	ChatMessage,
+	ChatRequest,
 	CloneOptions,
 	CommandResult,
 	Commit,
@@ -40,6 +50,56 @@ export type {
 
 /** 后端监听仓库变化时推送的事件名（见 gitView/watcher.go） */
 export const REPO_CHANGED_EVENT = "repo:changed";
+
+/**
+ * AI 流式对话事件（见 aiservice.go）。所有负载都带 streamId，
+ * 以便同一时间多个对话互不干扰。
+ */
+export const AI_CHUNK_EVENT = "ai:chunk";
+export const AI_REASONING_EVENT = "ai:reasoning";
+export const AI_TOOL_EVENT = "ai:tool";
+export const AI_ROUND_EVENT = "ai:round";
+export const AI_DONE_EVENT = "ai:done";
+export const AI_ERROR_EVENT = "ai:error";
+
+/** ai:chunk 负载：助手增量文本 */
+export interface AiChunkPayload {
+	streamId: string;
+	text: string;
+}
+
+/** ai:reasoning 负载：模型思考过程（reasoning）的增量文本 */
+export interface AiReasoningPayload {
+	streamId: string;
+	text: string;
+}
+
+/** ai:round 负载：一轮结束（前端据此折叠本轮思考） */
+export interface AiRoundPayload {
+	streamId: string;
+	index: number;
+}
+
+/** ai:tool 负载：工具调用开始（done=false）或结束（done=true，含 result） */
+export interface AiToolPayload {
+	streamId: string;
+	name: string;
+	args: string;
+	result?: string;
+	done: boolean;
+}
+
+/** ai:done 负载：最终文本 */
+export interface AiDonePayload {
+	streamId: string;
+	content: string;
+}
+
+/** ai:error 负载：错误信息（用户取消时为「已取消」） */
+export interface AiErrorPayload {
+	streamId: string;
+	message: string;
+}
 
 /** repo:changed 事件负载 */
 export interface RepoChange {
