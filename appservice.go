@@ -14,7 +14,7 @@ type AppService struct{}
 //
 // The same value is reported to the update manifest, so it must match the
 // release tag exactly (no "v" prefix).
-var appVersion = "0.1.4"
+var appVersion = "0.1.5"
 
 // appAuthor is the author shown in the About section.
 const appAuthor = "xiangzongliang"
