@@ -114,6 +114,11 @@ function onLeave() {
 .tooltip-bubble {
 	position: fixed;
 	z-index: 2000;
+	/* 气泡靠 transform: translateX(-50%) 居中，left 落在气泡中心；
+	   若用默认的 shrink-to-fit 宽度，可用空间只剩 left 到视口右缘的距离，
+	   靠近右侧的按钮（如工具栏“刷新”）会被压到只剩半个字宽而竖排。
+	   显式声明 max-content 让宽度与 left 无关。 */
+	width: max-content;
 	max-width: 300px;
 	padding: 4px 8px;
 	border-radius: 6px;

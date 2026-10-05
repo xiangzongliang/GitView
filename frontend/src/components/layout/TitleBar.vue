@@ -32,8 +32,11 @@ const branchChips = computed<RefDecoration[] | null>(() => {
 </script>
 
 <template>
-	<!-- 顶部 24px 为 macOS 原生拖拽区：按住可拖动窗口，纯点击仍会传递到按钮 -->
-	<div class="titlebar">
+	<!-- 整条标题栏都可拖动窗口：
+	     顶部 24px 由 macOS 原生拖拽区接管（main.go 的 InvisibleTitleBarHeight），
+	     其余部分由下面这个 Wails v3 标记驱动（runtime 读取该 CSS 自定义属性）。
+	     该属性会继承，所以交互控件需用 no-drag 显式退出，见 <style> 部分。 -->
+	<div class="titlebar" style="--wails-draggable: drag">
 		<!-- 绝对定位垂直居中：基于整个标题栏块居中，不受左侧红绿灯 padding 影响 -->
 		<div class="title-center">
 			<span class="title-name">{{ name || "Git View" }}</span>
@@ -94,12 +97,16 @@ const branchChips = computed<RefDecoration[] | null>(() => {
 	text-overflow: ellipsis;
 	min-width: 0;
 }
+/* 交互控件退出拖拽：--wails-draggable 会继承给子元素，
+   chip 可点击复制分支名、右侧按钮可点击，都不能触发窗口拖动 */
 .title-chips {
 	display: inline-flex;
 	gap: 5px;
 	flex: none;
+	--wails-draggable: no-drag;
 }
 .title-actions {
+	--wails-draggable: no-drag;
 	position: absolute;
 	right: 18px;
 	/* 与 .title-center 同一水平中心线，保证和路径/分支等内容垂直居中对齐 */
