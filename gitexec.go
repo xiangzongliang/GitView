@@ -181,6 +181,65 @@ func runGitNetworkStream(repoPath string, onChunk func(string), args ...string) 
 	return finishGitCmd(ctx, start, repoPath, args, cmd.Run(), &stdout, &stderr)
 }
 
+// runGitStep executes one git command for the step-by-step UI workflows and
+// returns the command line plus combined stdout/stderr output. A failing git
+// command is not an error here — it is reported via GitStepResult.OK so the
+// frontend can display it inline and decide what to do next.
+func runGitStep(repoPath string, network bool, args ...string) *GitStepResult {
+	timeout := 60 * time.Second
+	if network {
+		timeout = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	markGitCmdStart()
+	defer markGitCmdDone()
+	start := time.Now()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if repoPath != "" {
+		cmd.Dir = repoPath
+	}
+	cmd.Env = gitEnv()
+	cmd.WaitDelay = 5 * time.Second
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	runErr := cmd.Run()
+	combined := strings.TrimRight(stdout.String()+stderr.String(), "\n")
+	res := &GitStepResult{
+		Command: "git " + joinCommand(args...),
+		Output:  combined,
+		OK:      runErr == nil && ctx.Err() == nil,
+	}
+	entry := GitLogEntry{
+		Time:     start.UnixMilli(),
+		Kind:     "git",
+		Dir:      repoPath,
+		Command:  res.Command,
+		Duration: time.Since(start).Milliseconds(),
+		Output:   combined,
+	}
+	switch {
+	case ctx.Err() == context.DeadlineExceeded:
+		res.Error = "超时"
+		entry.Error = res.Error
+	case runErr != nil:
+		res.Error = firstNonEmpty(
+			strings.TrimSpace(stderr.String()),
+			strings.TrimSpace(stdout.String()),
+			runErr.Error(),
+		)
+		entry.Error = res.Error
+	default:
+		entry.OK = true
+	}
+	recordCommand(entry)
+	return res
+}
+
 // chunkFlusher collects writes and periodically flushes them to a callback, so
 // a chatty progress stream (git --progress redraws a line many times a second)
 // doesn't flood the frontend with one event per write.

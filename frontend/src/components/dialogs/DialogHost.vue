@@ -5,6 +5,7 @@ import PromptDialog from './PromptDialog.vue'
 import CloneDialog from './CloneDialog.vue'
 import BranchDialog from './BranchDialog.vue'
 import MergeDialog from './MergeDialog.vue'
+import MergeIntoDialog from './MergeIntoDialog.vue'
 import PushDialog from './PushDialog.vue'
 import PullDialog from './PullDialog.vue'
 import StashDialog from './StashDialog.vue'
@@ -22,6 +23,7 @@ const ui = useUI()
     <CloneDialog v-else-if="ui.dialog.kind === 'clone'" @close="ui.closeDialog()" />
     <BranchDialog v-else-if="ui.dialog.kind === 'branch'" :payload="ui.dialog.payload" @close="ui.closeDialog()" />
     <MergeDialog v-else-if="ui.dialog.kind === 'merge'" :payload="ui.dialog.payload" @close="ui.closeDialog()" />
+    <MergeIntoDialog v-else-if="ui.dialog.kind === 'merge-into'" :payload="ui.dialog.payload" @close="ui.closeDialog()" />
     <PushDialog v-else-if="ui.dialog.kind === 'push'" @close="ui.closeDialog()" />
     <PullDialog v-else-if="ui.dialog.kind === 'pull'" @close="ui.closeDialog()" />
     <StashDialog v-else-if="ui.dialog.kind === 'stash'" @close="ui.closeDialog()" />

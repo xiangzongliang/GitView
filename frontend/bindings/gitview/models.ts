@@ -244,6 +244,28 @@ export interface GitLogEntry {
 }
 
 /**
+ * GitStepResult carries one git command's displayable result for step-by-step
+ * UI workflows (e.g. "merge current branch into …").
+ */
+export interface GitStepResult {
+    /**
+     * copy-pasteable command line
+     */
+    "command": string;
+
+    /**
+     * combined stdout+stderr
+     */
+    "output": string;
+    "ok": boolean;
+
+    /**
+     * human-readable failure reason when !OK
+     */
+    "error": string;
+}
+
+/**
  * GroupInfo is a repository group's persisted metadata. The slice order in the
  * config file is the display order; empty groups are kept so they survive a
  * restart until the user dissolves them.

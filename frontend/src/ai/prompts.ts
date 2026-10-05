@@ -72,3 +72,43 @@ export function buildCommitUserPrompt(ctx: CommitContext): string {
 	}
 	return parts.join("\n");
 }
+
+// ------------------------------------------------------------- 合并信息生成
+
+/** 合并信息生成：系统提示词（把多个待合并提交归纳成一句合并说明）。 */
+export const MERGE_SUMMARY_SYSTEM_PROMPT = [
+	"你是一名严谨的工程师，负责为 Git 分支合并撰写合并提交信息（merge commit message）。",
+	"",
+	"要求：",
+	"1. 只输出合并信息本身：不要任何解释、客套话、Markdown 代码块围栏或引号。",
+	"2. 输出单行文本，不要换行；长度控制在 10～100 字。",
+	"3. 归纳这批提交的共同主题（整体做了什么、为了什么），",
+	"   不要罗列单个提交标题、文件名或提交号，不要写成流水账。",
+	"4. 主题分散时向上概括，可用「模块：要点」式的紧凑表达；",
+	"   确实有 2～3 个并列主题时用顿号连接，仍保持一句话。",
+	"5. 使用与提交记录一致的语言；无法判断时默认使用中文。",
+	"6. 不要编造提交记录中不存在的内容。",
+].join("\n");
+
+/** 合并信息生成所需的上下文。 */
+export interface MergeSummaryContext {
+	/** 被合并的分支（源） */
+	sourceBranch: string;
+	/** 合并进去的分支（目标） */
+	targetBranch: string;
+	/** 将被合并的提交（新 → 旧） */
+	commits: { hash: string; subject: string; author?: string }[];
+}
+
+/** 合并信息生成：用户提示词（分支名 + 待合并提交清单）。 */
+export function buildMergeSummaryUserPrompt(ctx: MergeSummaryContext): string {
+	const lines = ctx.commits.map(
+		(c) => `- ${c.hash.slice(0, 7)} ${c.subject}`,
+	);
+	return [
+		`即将把分支 ${ctx.sourceBranch} 合并进 ${ctx.targetBranch}，请为这次合并提交写一句简短说明。`,
+		"",
+		`待合并的提交（共 ${ctx.commits.length} 个，新 → 旧）：`,
+		...lines,
+	].join("\n");
+}

@@ -222,3 +222,12 @@ type CommandResult struct {
 	NewCwd  string `json:"newCwd"`
 	Timeout bool   `json:"timeout"`
 }
+
+// GitStepResult carries one git command's displayable result for step-by-step
+// UI workflows (e.g. "merge current branch into …").
+type GitStepResult struct {
+	Command string `json:"command"` // copy-pasteable command line
+	Output  string `json:"output"`  // combined stdout+stderr
+	OK      bool   `json:"ok"`
+	Error   string `json:"error"` // human-readable failure reason when !OK
+}

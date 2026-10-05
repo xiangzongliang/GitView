@@ -79,6 +79,12 @@ function branchMenu(e: MouseEvent, b: BranchInfo) {
 			action: () => ui.openDialog("merge", { ref: b.name }),
 		},
 		{
+			// 当前分支合并到…：把当前检出分支合并进选定的本地分支（向导式流程）
+			label: b.isCurrent ? "当前分支合并到…" : "将当前分支合并到此分支…",
+			icon: "merge",
+			action: () => ui.openDialog("merge-into", { ref: b.name }),
+		},
+		{
 			label: "将当前分支 rebase 到此分支",
 			icon: "revert",
 			disabled: b.isCurrent,
@@ -331,6 +337,13 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 					<Icon name="branch" :size="12" />
 					<span class="sec-title">分支</span>
 					<span class="sec-count">{{ localBranches.length }}</span>
+				</button>
+				<button
+					class="btn-icon sec-add"
+					title="当前分支合并到…"
+					@click="ui.openDialog('merge-into')"
+				>
+					<Icon name="merge" :size="12" />
 				</button>
 				<button
 					class="btn-icon sec-add"

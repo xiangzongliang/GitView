@@ -1125,6 +1125,28 @@ func (s *GitService) DeleteTag(repoPath string, name string, remote string) erro
 }
 
 // ---------------------------------------------------------------------------
+// Step runner (for guided multi-step workflows)
+// ---------------------------------------------------------------------------
+
+// RunGitStep executes one raw git command and returns its command line plus
+// combined output for step-by-step display in the UI. Unlike the other
+// methods, a failing git command does not produce a Go error: the frontend
+// inspects GitStepResult.OK and decides how to continue. The error return is
+// reserved for invalid arguments.
+//
+// network selects the long timeout used by commands that talk to a remote
+// (fetch/pull/push).
+func (s *GitService) RunGitStep(repoPath string, args []string, network bool) (*GitStepResult, error) {
+	if repoPath == "" {
+		return nil, errors.New("没有仓库路径")
+	}
+	if len(args) == 0 {
+		return nil, errors.New("缺少 git 参数")
+	}
+	return runGitStep(repoPath, network, args...), nil
+}
+
+// ---------------------------------------------------------------------------
 // Built-in terminal
 // ---------------------------------------------------------------------------
 

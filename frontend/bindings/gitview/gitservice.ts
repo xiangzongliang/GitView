@@ -231,6 +231,20 @@ export function RunCommand(repoPath: string, cwd: string, command: string): $Can
 }
 
 /**
+ * RunGitStep executes one raw git command and returns its command line plus
+ * combined output for step-by-step display in the UI. Unlike the other
+ * methods, a failing git command does not produce a Go error: the frontend
+ * inspects GitStepResult.OK and decides how to continue. The error return is
+ * reserved for invalid arguments.
+ * 
+ * network selects the long timeout used by commands that talk to a remote
+ * (fetch/pull/push).
+ */
+export function RunGitStep(repoPath: string, args: string[] | null, network: boolean): $CancellablePromise<$models.GitStepResult | null> {
+    return $Call.ByID(1252964664, repoPath, args, network);
+}
+
+/**
  * SetGlobalConfig writes one global git config key. An empty value unsets it.
  */
 export function SetGlobalConfig(key: string, value: string): $CancellablePromise<void> {
