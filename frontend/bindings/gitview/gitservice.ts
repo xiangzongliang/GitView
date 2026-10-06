@@ -16,6 +16,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 /**
+ * AddRemote adds a remote pointing at url. The name must be unique.
+ */
+export function AddRemote(repoPath: string, name: string, url: string): $CancellablePromise<void> {
+    return $Call.ByID(2602220066, repoPath, name, url);
+}
+
+/**
  * Checkout switches to an existing branch, tag or commit.
  */
 export function Checkout(repoPath: string, ref: string): $CancellablePromise<void> {
@@ -190,6 +197,14 @@ export function RebaseSkip(repoPath: string): $CancellablePromise<void> {
  */
 export function Refs(repoPath: string): $CancellablePromise<$models.RefsData | null> {
     return $Call.ByID(2657193779, repoPath);
+}
+
+/**
+ * RemoveRemote removes a remote. The last remaining remote is protected so the
+ * repository never ends up without any remote.
+ */
+export function RemoveRemote(repoPath: string, name: string): $CancellablePromise<void> {
+    return $Call.ByID(2331660635, repoPath, name);
 }
 
 /**

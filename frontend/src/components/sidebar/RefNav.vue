@@ -237,6 +237,26 @@ function remoteMenu(e: MouseEvent, name: string) {
 				if (r?.url) copyText(r.url);
 			},
 		},
+		{ separator: true },
+		{
+			label: "删除远程",
+			icon: "trash",
+			danger: true,
+			// 至少保留一个远程：只剩最后一个时禁用删除。
+			disabled: remotes.value.length <= 1,
+			action: async () => {
+				const ok = await ui.confirm({
+					title: "删除远程",
+					message:
+						"确定删除远程 “" +
+						name +
+						"” 吗？\n对应的远程跟踪分支也会一并删除。",
+					confirmLabel: "删除",
+					danger: true,
+				});
+				if (ok) await repo.removeRemote(name);
+			},
+		},
 	]);
 }
 
@@ -404,6 +424,13 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 				>
 					<Icon name="fetch" :size="12" />
 				</button>
+				<button
+					class="btn-icon sec-add"
+					title="添加远程"
+					@click="ui.openDialog('remote')"
+				>
+					<Icon name="plus" :size="12" />
+				</button>
 			</div>
 			<template v-if="!collapsed.remotes">
 				<template v-for="r in remotes" :key="r.name">
@@ -459,7 +486,7 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 					</div>
 				</template>
 				<div v-if="remotes.length === 0" class="nav-empty">
-					没有配置远程
+					没有配置远程（点 + 添加）
 				</div>
 			</template>
 		</div>

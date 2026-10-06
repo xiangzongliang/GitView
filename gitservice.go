@@ -934,6 +934,30 @@ func (s *GitService) Reset(repoPath string, target string, mode string) error {
 // Remote operations
 // ---------------------------------------------------------------------------
 
+// AddRemote adds a remote pointing at url. The name must be unique.
+func (s *GitService) AddRemote(repoPath string, name string, url string) error {
+	name = strings.TrimSpace(name)
+	url = strings.TrimSpace(url)
+	if name == "" {
+		return errors.New("远程名不能为空")
+	}
+	if url == "" {
+		return errors.New("远程地址不能为空")
+	}
+	_, err := runGit(repoPath, "remote", "add", name, url)
+	return err
+}
+
+// RemoveRemote removes a remote. The last remaining remote is protected so the
+// repository never ends up without any remote.
+func (s *GitService) RemoveRemote(repoPath string, name string) error {
+	if len(s.remoteNames(repoPath)) <= 1 {
+		return errors.New("至少保留一个远程，无法删除最后一个")
+	}
+	_, err := runGit(repoPath, "remote", "remove", name)
+	return err
+}
+
 // Fetch fetches one remote (or all when remote == "").
 func (s *GitService) Fetch(repoPath string, remote string, prune bool) (string, error) {
 	args := []string{"fetch"}

@@ -616,6 +616,20 @@ export const useRepo = defineStore("repo", {
 				useUI().success("Push 完成", (out || "").trim() || undefined);
 			await this.refreshAll();
 		},
+		addRemote(name: string, url: string) {
+			return this.runOp(
+				"添加远程 " + name,
+				() => GitService.AddRemote(this.path, name, url),
+				{ key: "remote" },
+			);
+		},
+		removeRemote(name: string) {
+			return this.runOp(
+				"删除远程 " + name,
+				() => GitService.RemoveRemote(this.path, name),
+				{ key: "remote" },
+			);
+		},
 
 		stashSave(opts: StashOptions) {
 			return this.runOp(

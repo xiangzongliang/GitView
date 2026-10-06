@@ -12,11 +12,11 @@
         <key>CFBundleIdentifier</key>
             <string>com.gitview.desktop</string>
         <key>CFBundleVersion</key>
-            <string>0.1.5</string>
+            <string>0.1.6</string>
         <key>CFBundleGetInfoString</key>
             <string>Git View - a visual Git client</string>
         <key>CFBundleShortVersionString</key>
-            <string>0.1.5</string>
+            <string>0.1.6</string>
         <key>CFBundleIconFile</key>
             <string>icons</string>
         <key>LSMinimumSystemVersion</key>

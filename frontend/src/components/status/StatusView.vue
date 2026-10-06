@@ -4,14 +4,22 @@ import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useAi } from "../../stores/ai";
 import { errMsg, RepoService } from "../../api";
-import { availableAiModels, decodeModelValue, encodeModelValue } from "../../ai/models";
+import {
+	availableAiModels,
+	decodeModelValue,
+	encodeModelValue,
+} from "../../ai/models";
 import { collectCommitContext } from "../../ai/commitContext";
+import type { ContextPick } from "../../ai/commitContext";
 import {
 	COMMIT_PREFIX_PRESETS,
 	CUSTOM_PREFIX_VALUE,
 	isPresetPrefix,
 } from "../../ai/commitPrefix";
-import { buildCommitSystemPrompt, buildCommitUserPrompt } from "../../ai/prompts";
+import {
+	buildCommitSystemPrompt,
+	buildCommitUserPrompt,
+} from "../../ai/prompts";
 import FileList from "./FileList.vue";
 import DiffViewer from "../common/DiffViewer.vue";
 import Icon from "../ui/Icon.vue";
@@ -179,10 +187,7 @@ watch(
 			(c) => encodeModelValue(c.providerId, c.model) === cur,
 		);
 		if (!valid) {
-			aiModel.value = encodeModelValue(
-				list[0].providerId,
-				list[0].model,
-			);
+			aiModel.value = encodeModelValue(list[0].providerId, list[0].model);
 		}
 	},
 	{ deep: true, immediate: true },
@@ -208,8 +213,54 @@ const canAiComplete = computed(() => {
 const aiButtonHint = computed(() => {
 	if (!hasAiModel.value) return "还没有可用的 AI 模型，点击前往设置配置";
 	if (changeCount.value === 0) return "当前没有可分析的变更";
-	return "根据当前变更生成提交信息";
+	if (stagedCount.value > 0)
+		return `根据勾选的 ${stagedCount.value} 个文件生成提交信息`;
+	if (repo.selectedFile) return "根据当前选中的文件生成提交信息";
+	return "根据全部变更生成提交信息";
 });
+
+/** 在状态里查文件的变更字符（找不到时退回按分组推断）。 */
+function statusCharOf(path: string, group: string): string {
+	const st = repo.status;
+	const found = [
+		...(st?.staged || []),
+		...(st?.unstaged || []),
+		...(st?.untracked || []),
+		...(st?.conflicted || []),
+	].find((f) => f.path === path);
+	if (found?.statusChar) return found.statusChar;
+	if (group === "untracked") return "?";
+	if (group === "conflicted") return "U";
+	return "M";
+}
+
+/**
+ * 本次 AI 分析要用的文件：
+ * - 勾选了（已暂存）文件时，只分析这些文件；
+ * - 没有勾选但左侧选中了某个文件时，只分析该文件；
+ * - 都没有时返回 null，交给 collectCommitContext 使用工作区全部变更。
+ */
+function aiScope(): ContextPick[] | null {
+	const st = repo.status;
+	if (!st) return null;
+	const staged = st.staged || [];
+	if (staged.length > 0) {
+		return staged.map((f) => ({
+			path: f.path,
+			staged: true,
+			status: f.statusChar,
+		}));
+	}
+	const sel = repo.selectedFile;
+	if (!sel) return null;
+	return [
+		{
+			path: sel.path,
+			staged: sel.staged,
+			status: statusCharOf(sel.path, sel.group),
+		},
+	];
+}
 
 /** 收集变更上下文后打开流式对话弹窗，生成结果由用户确认后写入输入框。 */
 async function aiComplete() {
@@ -222,7 +273,11 @@ async function aiComplete() {
 	const { providerId, model } = decodeModelValue(aiModel.value);
 	aiBusy.value = true;
 	try {
-		const ctx = await collectCommitContext(repo.path, repo.status);
+		const ctx = await collectCommitContext(
+			repo.path,
+			repo.status,
+			aiScope(),
+		);
 		const prefix = commitPrefix.value;
 		ui.openDialog("ai-commit", {
 			providerId,
