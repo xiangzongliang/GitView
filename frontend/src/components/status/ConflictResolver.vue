@@ -1,30 +1,31 @@
 <script setup lang="ts">
 // 冲突解决器（选中冲突文件时的默认视图）。
 //
-// 三种视图：
-// - 三方合并（默认）：三窗格布局 —— 上方 B（当前分支完整内容，只读）与
+// 两种视图：
+// - 冲突透视（默认）：三窗格布局 —— 上方 B（当前分支完整内容，只读）与
 //   C（传入分支完整内容，只读）左右对照，下方 D（合并结果，可编辑）。
 //   三个窗格都显示全量文件内容，冲突区域按面板着色高亮（B 绿 / C 蓝 / D 黄）；
 //   窗格之间的分割条可拖拽调整宽/高；三窗格按行对齐映射同步滚动；
-//   每个冲突块位置内联悬浮「保留 xxx」芯片：B/C 面板各自提供单侧取舍，
-//   D 面板提供「保留 B / 保留 C / 保留两者」；工具条冲突徽章可点击跳回首个冲突。
-// - 冲突对比：保留原有的 diff 对比显示。
-// - 源码编辑：直接编辑带冲突标记的原始文件（与 D 共享同一份内容）。
+//   每个冲突块顶部以 Coder 透镜行（#lens 插槽）展示「保留 xxx」芯片：
+//   B/C 面板各自提供单侧取舍，D 面板提供「保留 B / 保留 C / 保留两者」；
+//   工具条冲突徽章可点击跳回首个冲突；支持全屏展示（与 Stash 详情最大化同款）。
+// - 源码编辑：直接编辑带冲突标记的原始文件（= D 的全屏化，与 D 共享同一份
+//   内容与透镜行芯片）。
 //
-// 冲突块解析始终以 D 的当前内容为准（扫描 <<<<<<< / ======= / >>>>>>> 标记），
-// 因此手动编辑 D 之后快捷按钮依然定位准确。
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+// 字号/语言在 D（或源码编辑）的状态栏统一调整，同步应用到 B/C 三个编辑器；
+// 字号本地持久化。冲突块解析始终以 D 的当前内容为准（扫描 <<<<<<< /
+// ======= / >>>>>>> 标记），因此手动编辑 D 之后快捷按钮依然定位准确。
+import { computed, nextTick, ref, watch } from "vue";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { errMsg, GitService } from "../../api";
 import type { ConflictDetail } from "../../api";
-import DiffViewer from "../common/DiffViewer.vue";
 import Icon from "../ui/Icon.vue";
 import Spinner from "../ui/Spinner.vue";
 import {
 	CODER_DEFAULT_FONT_SIZE,
 	CoderView,
-	clampFontSize,
+	snapFontOption,
 	coderLineHeight,
 } from "../Coder";
 import {
@@ -39,13 +40,12 @@ const props = defineProps<{ path: string }>();
 const repo = useRepo();
 const ui = useUI();
 
-type Mode = "merge3" | "diff" | "source";
+type Mode = "merge3" | "source";
 const MODE_KEY = "gv.conflictMode";
 const mode = ref<Mode>(loadMode());
-/** 三方合并是默认的冲突解决形式（用户上次显式选择的视图仍会记住） */
+/** 冲突透视是默认的冲突解决形式（用户上次显式选择的视图仍会记住） */
 function loadMode(): Mode {
-	const saved = localStorage.getItem(MODE_KEY);
-	return saved === "diff" || saved === "source" ? saved : "merge3";
+	return localStorage.getItem(MODE_KEY) === "source" ? "source" : "merge3";
 }
 function setMode(m: Mode) {
 	mode.value = m;
@@ -196,7 +196,8 @@ const fontSize = ref(loadFontSize());
 function loadFontSize(): number {
 	try {
 		const n = Number(localStorage.getItem(FONT_KEY));
-		if (Number.isFinite(n) && n > 0) return clampFontSize(n);
+		// 吸附到菜单档位（历史持久化值可能是旧档位如 15/20/24）
+		if (Number.isFinite(n) && n > 0) return snapFontOption(n);
 	} catch {
 		/* ignore */
 	}
@@ -210,10 +211,23 @@ function onFontSizeChange(size: number) {
 	} catch {
 		/* ignore */
 	}
+	// 行高随字号变化：各窗格原有的 px 滚动偏移不再对应相同行，
+	// 等 Coder 重新度量后重新对齐到当前冲突块
+	if (hunks.value.length > 0) scheduleScrollToHunk(active.value);
 }
 
-/** 当前 Coder 行高（px）：与 Coder 内部度量一致，供芯片定位与滚动留白估算 */
+/** 当前 Coder 行高（px）：与 Coder 内部度量一致，供滚动留白估算 */
 const linePx = computed(() => coderLineHeight(fontSize.value));
+
+// ------------------------------------------------------------- 编辑器语言（三窗格共享）
+
+/** 当前语言（highlight.js id；空字符串 = 自动推断）：在 D / 源码编辑的
+ *  状态栏选择后回写到全部编辑器，B/C/D（及源码）三者始终同一语言 */
+const editorLanguage = ref("");
+
+function onLanguageChange(langId: string) {
+	editorLanguage.value = langId;
+}
 
 const active = ref(0);
 const activeHunk = computed(() => hunks.value[active.value]);
@@ -233,53 +247,6 @@ function updateActive(dLine: number) {
 
 let syncing = false;
 
-/** 各面板当前滚动偏移（px）：程序化滚动不会回传 scroll 事件，
- *  由 pushSync / scrollToHunk / onPaneScroll 主动记录，供内联芯片定位 */
-const paneScroll = reactive<Record<PaneId, { top: number; left: number }>>({
-	b: { top: 0, left: 0 },
-	c: { top: 0, left: 0 },
-	d: { top: 0, left: 0 },
-});
-
-/** 各面板主体视口高度（px）：芯片裁剪用（只渲染视口内的芯片） */
-const paneH = reactive<Record<PaneId, number>>({ b: 0, c: 0, d: 0 });
-
-const paneBodyElB = ref<HTMLElement | null>(null);
-const paneBodyElC = ref<HTMLElement | null>(null);
-const paneBodyElD = ref<HTMLElement | null>(null);
-
-let paneROs: ResizeObserver[] = [];
-watch(
-	() =>
-		[
-			paneBodyElB.value,
-			paneBodyElC.value,
-			paneBodyElD.value,
-		] as (HTMLElement | null)[],
-	(els) => {
-		for (const ro of paneROs) ro.disconnect();
-		paneROs = [];
-		els.forEach((el, i) => {
-			const id = PANES[i]!;
-			if (!el) {
-				paneH[id] = 0;
-				return;
-			}
-			paneH[id] = el.clientHeight;
-			const ro = new ResizeObserver(() => {
-				paneH[id] = el.clientHeight;
-			});
-			ro.observe(el);
-			paneROs.push(ro);
-		});
-	},
-	{ flush: "post" },
-);
-onBeforeUnmount(() => {
-	for (const ro of paneROs) ro.disconnect();
-	paneROs = [];
-});
-
 /** 把 src 面板的滚动位置按行映射推送到其余面板（程序化滚动不会再回传） */
 function pushSync(src: PaneId, top: number, left?: number) {
 	const s = coderOf(src);
@@ -291,20 +258,15 @@ function pushSync(src: PaneId, top: number, left?: number) {
 		if (dst === src) continue;
 		const t = coderOf(dst);
 		if (!t) continue;
-		const actual = t.setScroll(
+		t.setScroll(
 			t.scrollTopForLine(a.mapLine(src, dst, srcLine)) + frac,
 			left,
 		);
-		// setScroll 不触发 scroll 事件：在此记录实际位置供芯片定位
-		paneScroll[dst].top = actual.top;
-		paneScroll[dst].left = actual.left;
 	}
 }
 
-/** 任一面板滚动：记录自身偏移 + 更新当前冲突块 + 同步其余两个面板 */
+/** 任一面板滚动：更新当前冲突块 + 同步其余两个面板 */
 function onPaneScroll(src: PaneId, top: number, left: number) {
-	paneScroll[src].top = top;
-	paneScroll[src].left = left;
 	if (syncing) return;
 	syncing = true;
 	try {
@@ -339,8 +301,6 @@ function scrollToHunk(i: number) {
 	if (d) {
 		const top = Math.max(0, d.scrollTopForLine(h.start) - pad);
 		const actual = d.setScroll(top);
-		paneScroll.d.top = actual.top;
-		paneScroll.d.left = actual.left;
 		pushSync("d", actual.top);
 	} else if (srcCoder.value) {
 		srcCoder.value.setScroll(
@@ -351,14 +311,12 @@ function scrollToHunk(i: number) {
 		for (const id of ["b", "c"] as const) {
 			const t = coderOf(id);
 			if (!t) continue;
-			const actual = t.setScroll(
+			t.setScroll(
 				Math.max(
 					0,
 					t.scrollTopForLine(a.mapLine("d", id, h.start)) - pad,
 				),
 			);
-			paneScroll[id].top = actual.top;
-			paneScroll[id].left = actual.left;
 		}
 	}
 }
@@ -464,63 +422,51 @@ const coderBase: Record<string, string> = {
 	"--primary": "var(--accent)",
 };
 
-/** 冲突高亮色：B 绿（ours）/ C 蓝（theirs）/ D 黄（冲突块） */
+/** 冲突高亮色：B 绿（ours）/ C 蓝（theirs）/ D 黄（冲突块）；
+ *  --ed-lens-bg 为透镜条带的不透明底色（与面板身份色同色系，盖住被覆盖的代码行） */
 const bTheme: Record<string, string> = {
 	...coderBase,
 	"--ed-mark-bg": "color-mix(in oklab, var(--green) 14%, transparent)",
 	"--ed-mark-bar": "var(--green)",
+	"--ed-lens-bg": "color-mix(in oklab, var(--green) 16%, var(--bg-app))",
 };
 const cTheme: Record<string, string> = {
 	...coderBase,
 	"--ed-mark-bg": "color-mix(in oklab, var(--accent) 14%, transparent)",
 	"--ed-mark-bar": "var(--accent)",
+	"--ed-lens-bg": "color-mix(in oklab, var(--accent) 16%, var(--bg-app))",
 };
 const dTheme: Record<string, string> = {
 	...coderBase,
 	"--ed-mark-bg": "color-mix(in oklab, var(--yellow) 13%, transparent)",
 	"--ed-mark-bar": "var(--yellow)",
+	"--ed-lens-bg": "color-mix(in oklab, var(--yellow) 15%, var(--bg-app))",
 };
 
-// ------------------------------------------------------------- 内联冲突芯片
+// ------------------------------------------------------------- 冲突块透镜行
 
-/** Coder 内容区上内边距（px）：与 Coder 的 --ed-pad-y 一致 */
-const CODE_PAD_Y = 8;
+/** 各面板透镜行（「保留 xxx」芯片条带）锚定的源行号，与 hunks 一一对应：
+ *  B/C = 该冲突块 ours/theirs 段在对应分支文件中的首行，D/源码 = "<<<<<<<" 标记行。
+ *  插槽通过 index（lensLines 下标 = hunks 下标）定位冲突块，重复行号也不会歧义 */
+const lensLinesB = computed(() => align.value.hunkLines.map((l) => l.b));
+const lensLinesC = computed(() => align.value.hunkLines.map((l) => l.c));
+const lensLinesD = computed(() => hunks.value.map((h) => h.start));
 
-interface HunkChip {
-	/** 冲突块序号（hunks 下标） */
-	idx: number;
-	/** 芯片中心 y（面板视口坐标，px） */
-	top: number;
-}
+// ------------------------------------------------------------- 全屏（与 Stash 详情最大化同款：占满整个视口）
 
-/** 三个面板中每个冲突块的内联「保留 xxx」芯片位置：
- *  锚在冲突区域垂直中心，视口外的不渲染（随滚动/字号/内容变化重算） */
-const chipsAll = computed<Record<PaneId, HunkChip[]>>(() => {
-	const out: Record<PaneId, HunkChip[]> = { b: [], c: [], d: [] };
-	const hs = hunks.value;
-	if (hs.length === 0) return out;
-	const lh = linePx.value;
-	const lines = align.value.hunkLines;
-	hs.forEach((h, i) => {
-		const l = lines[i];
-		if (!l) return;
-		// 各面板中该冲突块的定位行与占行数（B=ours 段 / C=theirs 段 / D=整块）
-		const span: Record<PaneId, { line: number; rows: number }> = {
-			b: { line: l.b, rows: Math.max(1, h.mid - h.start - 1) },
-			c: { line: l.c, rows: Math.max(1, h.end - h.mid - 1) },
-			d: { line: h.start, rows: h.size },
-		};
-		for (const p of PANES) {
-			const s = span[p]!;
-			const y = CODE_PAD_Y + s.line * lh - paneScroll[p].top;
-			const top = y + (s.rows * lh) / 2;
-			// 视口裁剪：中心点离屏太远的不渲染（留 24px 余量避免边缘闪现）
-			if (paneH[p] > 0 && (top < -24 || top > paneH[p] + 24)) continue;
-			out[p]!.push({ idx: i, top });
-		}
+const fullscreen = ref(false);
+
+function toggleFullscreen() {
+	fullscreen.value = !fullscreen.value;
+	// 布局切换后视口高度变化会把各窗格 scrollTop 钉到新的可滚动范围：
+	// 等 DOM 更新完成后重新定位到当前冲突块，保持阅读位置连贯
+	void nextTick(() => {
+		setTimeout(() => {
+			if (!loading.value && hunks.value.length > 0)
+				scrollToHunk(active.value);
+		}, 0);
 	});
-	return out;
-});
+}
 
 // ------------------------------------------------------------- 加载 / 保存
 
@@ -535,12 +481,8 @@ async function load(keepText = false) {
 	loadError.value = "";
 	const prev = keepText ? text.value : "";
 	if (!keepText) {
+		// 切换文件：各窗格回到顶部（D 重载不保留滚动）
 		dPreserve.value = false;
-		// 切换文件：各窗格回到顶部，芯片定位基准同步归零
-		for (const p of PANES) {
-			paneScroll[p].top = 0;
-			paneScroll[p].left = 0;
-		}
 	}
 	try {
 		const d = await GitService.ConflictDetail(repo.path, props.path);
@@ -624,7 +566,7 @@ async function save(markResolved = false) {
 			ui.success("已标记为已解决");
 		} else {
 			await repo.refreshStatus();
-			// 重新选中以刷新「冲突对比」视图的 diff
+			// 重新选中以刷新 diff 视图
 			void repo.selectStatusFile({
 				path: props.path,
 				staged: false,
@@ -674,7 +616,7 @@ const sideMissingText = computed(() => {
 </script>
 
 <template>
-	<div class="resolver">
+	<div class="resolver" :class="{ 'is-full': fullscreen }">
 		<!-- 工具条 -->
 		<div class="bar">
 			<div class="file">
@@ -704,23 +646,15 @@ const sideMissingText = computed(() => {
 				<button
 					class="mode-btn"
 					:class="{ on: mode === 'merge3' }"
-					title="B / C 分支全文对照 + 合并结果编辑（默认）"
+					title="B / C 分支全文对照 + 合并结果编辑，多视角透视冲突（默认）"
 					@click="setMode('merge3')"
 				>
-					三方合并
-				</button>
-				<button
-					class="mode-btn"
-					:class="{ on: mode === 'diff' }"
-					title="以 diff 对比形式查看冲突"
-					@click="setMode('diff')"
-				>
-					冲突对比
+					冲突透视
 				</button>
 				<button
 					class="mode-btn"
 					:class="{ on: mode === 'source' }"
-					title="直接编辑带冲突标记的原始文件"
+					title="直接编辑带冲突标记的原始文件（合并结果 D 的全屏化，功能与 D 相同）"
 					@click="setMode('source')"
 				>
 					源码编辑
@@ -764,6 +698,17 @@ const sideMissingText = computed(() => {
 						</button>
 					</div>
 				</template>
+				<button
+					v-if="showSideEditors"
+					class="btn btn-icon"
+					:title="fullscreen ? '退出全屏' : '全屏显示'"
+					@click="toggleFullscreen"
+				>
+					<Icon
+						:name="fullscreen ? 'minimize-2' : 'maximize-2'"
+						:size="13"
+					/>
+				</button>
 				<button
 					class="btn"
 					:disabled="saving || !dirty"
@@ -819,16 +764,7 @@ const sideMissingText = computed(() => {
 			<p class="hint">选择一侧后将写入文件并自动暂存（标记已解决）</p>
 		</div>
 
-		<!-- 冲突对比：保留原有 diff 视图 -->
-		<DiffViewer
-			v-else-if="mode === 'diff'"
-			:raw="repo.fileDiff"
-			:loading="repo.fileDiffLoading"
-			:filename="path"
-			empty-text="没有差异"
-		/>
-
-		<!-- 源码编辑：直接编辑原始文件（与 D 共享内容） -->
+		<!-- 源码编辑：直接编辑原始文件（= D 的全屏化，与 D 共享内容与透镜行芯片） -->
 		<div v-else-if="mode === 'source'" class="source-wrap">
 			<div class="pane-head">
 				<span class="pane-title">
@@ -854,18 +790,52 @@ const sideMissingText = computed(() => {
 					class="pane-coder"
 					:data="text"
 					:filename="path"
+					:language="editorLanguage"
 					preserve-scroll
 					:marked-lines="align.marksD"
+					:lens-lines="lensLinesD"
 					:theme-vars="dTheme"
 					:font-size="fontSize"
 					@change="text = $event"
 					@save="save(false)"
 					@font-size-change="onFontSizeChange"
-				/>
+					@language-change="onLanguageChange"
+				>
+					<!-- 每个冲突块顶部的透镜行：保留 B / 保留 C / 保留两者 -->
+					<template #lens="{ index }">
+						<div class="lens-chips">
+							<span class="chip-idx">冲突 {{ index + 1 }}</span>
+							<button
+								type="button"
+								class="chip chip-ours"
+								:title="'此冲突块保留 ' + oursLabel"
+								@click="resolveHunkAt(index, 'ours')"
+							>
+								保留{{ oursLabel }}
+							</button>
+							<button
+								type="button"
+								class="chip chip-theirs"
+								:title="'此冲突块保留 ' + theirsLabel"
+								@click="resolveHunkAt(index, 'theirs')"
+							>
+								保留{{ theirsLabel }}
+							</button>
+							<button
+								type="button"
+								class="chip chip-both"
+								title="两侧内容都保留（当前分支在前）"
+								@click="resolveHunkAt(index, 'both')"
+							>
+								保留两者
+							</button>
+						</div>
+					</template>
+				</CoderView>
 			</div>
 		</div>
 
-		<!-- 三方合并（默认）：上 B | C，下 D，分割条可拖拽，三窗格同步滚动 -->
+		<!-- 冲突透视（默认）：上 B | C，下 D，分割条可拖拽，三窗格同步滚动 -->
 		<div v-else class="merge3" :class="dragClass">
 			<!-- 一侧没有该文件（新增/删除型冲突）：只能整文件取舍 -->
 			<div v-if="sideMissing" class="banner side-banner">
@@ -924,40 +894,40 @@ const sideMissingText = computed(() => {
 							<span class="pane-title">B · {{ oursLabel }}</span>
 							<span class="pane-sub">只读 · 绿色为冲突区域</span>
 						</div>
-						<div ref="paneBodyElB" class="pane-body">
+						<div class="pane-body">
 							<CoderView
 								ref="bCoder"
 								class="pane-coder"
 								:data="detail?.ours.content ?? ''"
 								:filename="path"
+								:language="editorLanguage"
 								readonly
 								:marked-lines="align.marksB"
+								:lens-lines="lensLinesB"
 								:theme-vars="bTheme"
 								:font-size="fontSize"
+								:status-controls="false"
 								@scroll="(t, l) => onPaneScroll('b', t, l)"
-								@font-size-change="onFontSizeChange"
-							/>
-							<!-- 每个冲突块位置的内联取舍芯片 -->
-							<div v-if="chipsAll.b.length" class="hunk-chips">
-								<div
-									v-for="chip in chipsAll.b"
-									:key="chip.idx"
-									class="chip-row"
-									:style="{ top: chip.top + 'px' }"
-								>
-									<span class="chip-idx"
-										>冲突 {{ chip.idx + 1 }}</span
-									>
-									<button
-										type="button"
-										class="chip chip-ours"
-										:title="'此冲突块保留 ' + oursLabel"
-										@click="resolveHunkAt(chip.idx, 'ours')"
-									>
-										保留{{ oursLabel }}
-									</button>
-								</div>
-							</div>
+							>
+								<!-- 每个冲突块顶部的透镜行：保留 B -->
+								<template #lens="{ index }">
+									<div class="lens-chips">
+										<span class="chip-idx"
+											>冲突 {{ index + 1 }}</span
+										>
+										<button
+											type="button"
+											class="chip chip-ours"
+											:title="'此冲突块保留 ' + oursLabel"
+											@click="
+												resolveHunkAt(index, 'ours')
+											"
+										>
+											保留{{ oursLabel }}
+										</button>
+									</div>
+								</template>
+							</CoderView>
 						</div>
 					</div>
 					<div
@@ -973,42 +943,42 @@ const sideMissingText = computed(() => {
 							>
 							<span class="pane-sub">只读 · 蓝色为冲突区域</span>
 						</div>
-						<div ref="paneBodyElC" class="pane-body">
+						<div class="pane-body">
 							<CoderView
 								ref="cCoder"
 								class="pane-coder"
 								:data="detail?.theirs.content ?? ''"
 								:filename="path"
+								:language="editorLanguage"
 								readonly
 								:marked-lines="align.marksC"
+								:lens-lines="lensLinesC"
 								:theme-vars="cTheme"
 								:font-size="fontSize"
+								:status-controls="false"
 								@scroll="(t, l) => onPaneScroll('c', t, l)"
-								@font-size-change="onFontSizeChange"
-							/>
-							<!-- 每个冲突块位置的内联取舍芯片 -->
-							<div v-if="chipsAll.c.length" class="hunk-chips">
-								<div
-									v-for="chip in chipsAll.c"
-									:key="chip.idx"
-									class="chip-row"
-									:style="{ top: chip.top + 'px' }"
-								>
-									<span class="chip-idx"
-										>冲突 {{ chip.idx + 1 }}</span
-									>
-									<button
-										type="button"
-										class="chip chip-theirs"
-										:title="'此冲突块保留 ' + theirsLabel"
-										@click="
-											resolveHunkAt(chip.idx, 'theirs')
-										"
-									>
-										保留{{ theirsLabel }}
-									</button>
-								</div>
-							</div>
+							>
+								<!-- 每个冲突块顶部的透镜行：保留 C -->
+								<template #lens="{ index }">
+									<div class="lens-chips">
+										<span class="chip-idx"
+											>冲突 {{ index + 1 }}</span
+										>
+										<button
+											type="button"
+											class="chip chip-theirs"
+											:title="
+												'此冲突块保留 ' + theirsLabel
+											"
+											@click="
+												resolveHunkAt(index, 'theirs')
+											"
+										>
+											保留{{ theirsLabel }}
+										</button>
+									</div>
+								</template>
+							</CoderView>
 						</div>
 					</div>
 				</div>
@@ -1019,7 +989,7 @@ const sideMissingText = computed(() => {
 					@pointerdown="startDragY"
 				/>
 
-				<!-- 下：合并结果 D（完整文件，可编辑；每个冲突块位置内联取舍芯片） -->
+				<!-- 下：合并结果 D（完整文件，可编辑；每个冲突块顶部透镜行取舍芯片） -->
 				<div class="pane pane-d">
 					<div class="pane-head">
 						<span class="pane-title">
@@ -1043,58 +1013,57 @@ const sideMissingText = computed(() => {
 							</span>
 						</span>
 					</div>
-					<div ref="paneBodyElD" class="pane-body">
+					<div class="pane-body">
 						<CoderView
 							ref="dCoder"
 							class="pane-coder"
 							:data="text"
 							:filename="path"
+							:language="editorLanguage"
 							:preserve-scroll="dPreserve"
 							:marked-lines="align.marksD"
+							:lens-lines="lensLinesD"
 							:theme-vars="dTheme"
 							:font-size="fontSize"
 							@change="text = $event"
 							@save="save(false)"
 							@scroll="(t, l) => onPaneScroll('d', t, l)"
 							@font-size-change="onFontSizeChange"
-						/>
-						<!-- 每个冲突块位置的内联取舍芯片：保留 B / 保留 C / 保留两者 -->
-						<div v-if="chipsAll.d.length" class="hunk-chips">
-							<div
-								v-for="chip in chipsAll.d"
-								:key="chip.idx"
-								class="chip-row"
-								:style="{ top: chip.top + 'px' }"
-							>
-								<span class="chip-idx"
-									>冲突 {{ chip.idx + 1 }}</span
-								>
-								<button
-									type="button"
-									class="chip chip-ours"
-									:title="'此冲突块保留 ' + oursLabel"
-									@click="resolveHunkAt(chip.idx, 'ours')"
-								>
-									保留{{ oursLabel }}
-								</button>
-								<button
-									type="button"
-									class="chip chip-theirs"
-									:title="'此冲突块保留 ' + theirsLabel"
-									@click="resolveHunkAt(chip.idx, 'theirs')"
-								>
-									保留{{ theirsLabel }}
-								</button>
-								<button
-									type="button"
-									class="chip chip-both"
-									title="两侧内容都保留（当前分支在前）"
-									@click="resolveHunkAt(chip.idx, 'both')"
-								>
-									保留两者
-								</button>
-							</div>
-						</div>
+							@language-change="onLanguageChange"
+						>
+							<!-- 每个冲突块顶部的透镜行：保留 B / 保留 C / 保留两者 -->
+							<template #lens="{ index }">
+								<div class="lens-chips">
+									<span class="chip-idx"
+										>冲突 {{ index + 1 }}</span
+									>
+									<button
+										type="button"
+										class="chip chip-ours"
+										:title="'此冲突块保留 ' + oursLabel"
+										@click="resolveHunkAt(index, 'ours')"
+									>
+										保留{{ oursLabel }}
+									</button>
+									<button
+										type="button"
+										class="chip chip-theirs"
+										:title="'此冲突块保留 ' + theirsLabel"
+										@click="resolveHunkAt(index, 'theirs')"
+									>
+										保留{{ theirsLabel }}
+									</button>
+									<button
+										type="button"
+										class="chip chip-both"
+										title="两侧内容都保留（当前分支在前）"
+										@click="resolveHunkAt(index, 'both')"
+									>
+										保留两者
+									</button>
+								</div>
+							</template>
+						</CoderView>
 					</div>
 				</div>
 			</div>
@@ -1110,6 +1079,17 @@ const sideMissingText = computed(() => {
 	display: flex;
 	flex-direction: column;
 	background: var(--bg-app);
+}
+
+/* 全屏展示：与 Stash 详情最大化同款——占满整个视口（z-index 低于弹窗层
+   的 1000，确认/提示弹窗仍能浮在其上） */
+.resolver.is-full {
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 100vw;
+	height: 100vh;
+	z-index: 900;
 }
 
 /* ------------------------------------------------------------------ 工具条 */
@@ -1495,44 +1475,38 @@ const sideMissingText = computed(() => {
 	color: var(--yellow);
 }
 
-/* ------------------------------------------------------------------ 内联冲突芯片 */
-/* 悬浮在面板主体上的绝对定位层：芯片跟随对应冲突块滚动 */
-.hunk-chips {
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
-	z-index: 6;
-	overflow: hidden;
-}
-.chip-row {
-	position: absolute;
-	right: 20px;
+/* ------------------------------------------------------------------ 冲突块透镜行芯片 */
+/* 芯片渲染在 Coder 的 #lens 插槽里（冲突块顶部的独占一行覆盖条）；
+   条带本身 pointer-events: none，芯片容器重新打开响应 */
+.lens-chips {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	transform: translateY(-50%);
+	min-width: 0;
 	pointer-events: auto;
 }
 .chip-idx {
+	flex: none;
 	font-family: var(--font-mono);
 	font-size: 10px;
 	color: var(--text-faint);
-	background: color-mix(in oklab, var(--bg-panel) 88%, transparent);
+	background: color-mix(in oklab, var(--bg-panel) 72%, transparent);
 	border-radius: 8px;
-	padding: 1px 5px;
+	padding: 0 5px;
+	line-height: 15px;
 	white-space: nowrap;
 }
 .chip {
-	height: 19px;
-	padding: 0 8px;
-	font-size: 10.5px;
+	flex: none;
+	height: 16px;
+	padding: 0 7px;
+	font-size: 10px;
 	line-height: 1;
-	border-radius: 10px;
+	border-radius: 9px;
 	border: 1px solid;
 	background: var(--bg-panel);
 	cursor: pointer;
 	white-space: nowrap;
-	box-shadow: 0 1px 4px rgb(0 0 0 / 30%);
 }
 /* 芯片颜色与分支身份色一致：保留 B 绿 / 保留 C 蓝 / 保留两者黄 */
 .chip-ours {

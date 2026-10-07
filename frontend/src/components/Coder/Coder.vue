@@ -30,6 +30,7 @@ import {
 	QUOTES,
 	buildCodeView,
 	canAutoClose,
+	charCols,
 	clampFontSize,
 	coderLineHeight,
 	commentStyleFor,
@@ -99,6 +100,13 @@ interface Props {
 	markedLines?: number[];
 	/** data 重载时保留滚动位置（供同步滚动场景，避免程序化更新内容后跳回顶部） */
 	preserveScroll?: boolean;
+	/** 状态栏是否展示字号/缩进/语言菜单（多窗格场景只让主窗格展示，
+	 *  其余窗格由外层统一回写 props）；关闭后仅保留 Ln/Col、选中、只读徽章 */
+	statusControls?: boolean;
+	/** 透镜行（lens row）对应的源行号（0 起）：在这些行的顶部渲染一条
+	 *  不透明的覆盖条，内容由 #lens 作用域插槽提供（如冲突块的「保留 xxx」芯片）。
+	 *  覆盖条随内容垂直滚动，但水平方向固定（不随横向滚动平移）。 */
+	lensLines?: number[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -113,6 +121,8 @@ const props = withDefaults(defineProps<Props>(), {
 	placeholder: "开始输入…",
 	markedLines: () => [],
 	preserveScroll: false,
+	statusControls: true,
+	lensLines: () => [],
 });
 
 const emit = defineEmits<{
@@ -121,6 +131,9 @@ const emit = defineEmits<{
 	indentChange: [size: number];
 	/** 状态栏字号菜单选择后上抛（外层通过 :font-size 回写生效） */
 	fontSizeChange: [size: number];
+	/** 状态栏语言菜单选择后上抛（空字符串 = 恢复自动检测）；
+	 *  多窗格共享语言时由外层回写到各窗格的 :language prop */
+	languageChange: [langId: string];
 	/** 折叠/展开导致可见行数变化（供外层按实际行数调整容器高度） */
 	fold: [visibleLines: number];
 	/** 滚动位置变化（用户滚动或组件内部滚动；外部调用 setScroll 不触发，避免同步回环） */
@@ -219,7 +232,7 @@ const LANGUAGE_OPTIONS: { id: LanguageId; label: string }[] = (() => {
 const INDENT_OPTIONS = [2, 4, 8];
 
 /** 字号可选项（px）：默认 13 与应用标准字号一致 */
-const FONT_OPTIONS = [11, 12, 13, 14, 15, 16, 18, 20, 24];
+const FONT_OPTIONS = [9, 10, 11, 12, 13, 14, 16, 18];
 
 const indentMenuOpen = ref(false);
 const langMenuOpen = ref(false);
@@ -265,10 +278,12 @@ function pickFontSize(size: number) {
 	if (clampFontSize(size) !== fontSizePx.value) emit("fontSizeChange", size);
 }
 
-/** 选择语言：null = 恢复自动（props/扩展名推断 → 内容检测） */
+/** 选择语言：null = 恢复自动（props/扩展名推断 → 内容检测）；
+ *  选择结果同时上抛，供多窗格场景下外层同步到其它编辑器 */
 function pickLang(id: LanguageId | null) {
 	manualLang.value = id;
 	langMenuOpen.value = false;
+	emit("languageChange", id ?? "");
 	// 补全的关键字/成员候选依赖语言，切换后立即重建文档词索引
 	rebuildDocWords();
 }
@@ -425,13 +440,50 @@ const visibleRange = computed(() => {
 	return { start, end, total };
 });
 
-/** 全文最长视觉列宽（tab 按 4 展开），用于锁定代码层水平滚动宽度 */
+// ---------- 透镜行（lens row） ----------
+
+/** 透镜覆盖条高度（px）：不低于一行行高，并保证小字号下芯片仍可容纳 */
+const lensStripH = computed(() => Math.max(lineHeightPx.value, 20));
+
+/** 透镜行渲染模型：把 lensLines 中的源行号映射为显示行号（折叠隐藏的
+ *  行跳过），换算成视口内坐标；只渲染可视区内的条带，内容来自 #lens 插槽 */
+const lensRows = computed(() => {
+	const src = props.lensLines;
+	if (!src || src.length === 0) return [];
+	const vl = view.value.visibleLines;
+	const lh = lineHeightPx.value;
+	const h = lensStripH.value;
+	const out: { idx: number; line: number; top: number }[] = [];
+	src.forEach((line, idx) => {
+		// visibleLines 升序：二分查找源行号对应的显示行索引
+		let lo = 0;
+		let hi = vl.length - 1;
+		let di = -1;
+		while (lo <= hi) {
+			const mid = (lo + hi) >> 1;
+			const v = vl[mid]!;
+			if (v === line) {
+				di = mid;
+				break;
+			}
+			if (v < line) lo = mid + 1;
+			else hi = mid - 1;
+		}
+		if (di < 0) return; // 该行被折叠隐藏：不渲染
+		const top = PAD_Y + di * lh - scrollY.value;
+		if (top > viewportH.value || top + h < 0) return; // 视口外
+		out.push({ idx, line, top });
+	});
+	return out;
+});
+
+/** 全文最长视觉列宽（tab 按 4 展开，CJK 等宽字符按 2 列），用于锁定代码层水平滚动宽度 */
 const maxVisualColumns = computed(() => {
 	let max = 0;
 	for (const line of sourceLines.value) {
 		let col = 0;
 		for (const ch of line) {
-			col += ch === "\t" ? 4 - (col % 4) : 1;
+			col += ch === "\t" ? 4 - (col % 4) : charCols(ch);
 		}
 		if (col > max) max = col;
 	}
@@ -573,10 +625,11 @@ function updateCursor() {
 			caretMarker.getBoundingClientRect().left -
 			mirror.getBoundingClientRect().left;
 	} else {
-		// 兑底：等宽推算（含 pad-x，与高亮层文本起点一致；Tab 按 tab-size 4 展开）
+		// 兜底：等宽推算（含 pad-x，与高亮层文本起点一致；Tab 按 tab-size 4 展开，
+		// CJK 等宽字符按 2 列计）
 		let visualCol = 0;
 		for (const ch of value.slice(lineStart, start)) {
-			visualCol += ch === "\t" ? 4 - (visualCol % 4) : 1;
+			visualCol += ch === "\t" ? 4 - (visualCol % 4) : charCols(ch);
 		}
 		caretX.value = Math.round(PAD_X + visualCol * charWidth.value);
 	}
@@ -1278,11 +1331,12 @@ const matches = computed(() =>
 
 // ---------- 查找匹配高亮 ----------
 
-/** text[lineStart..idx) 在 tab-size 4 下占的视觉列数（与光标/缩进度量一致） */
+/** text[lineStart..idx) 在 tab-size 4 下占的视觉列数（与光标/缩进度量一致；
+ *  CJK 等宽字符按 2 列计，否则中文内容的查找高亮宽度会偏窄） */
 function visualCols(value: string, lineStart: number, idx: number): number {
 	let col = 0;
 	for (let i = lineStart; i < idx; i++) {
-		col += value[i] === "\t" ? 4 - (col % 4) : 1;
+		col += value[i] === "\t" ? 4 - (col % 4) : charCols(value[i]!);
 	}
 	return col;
 }
@@ -1388,7 +1442,10 @@ function reveal(index: number) {
 	) {
 		el.scrollTop = Math.max(0, top - viewH / 2 + lineHeightPx.value / 2);
 	}
-	const x = PAD_X + (index - lineStartIndex(value, index)) * charWidth.value;
+	const x =
+		PAD_X +
+		visualCols(value, lineStartIndex(value, index), index) *
+			charWidth.value;
 	const viewW = el.clientWidth;
 	if (x < el.scrollLeft + 32) {
 		el.scrollLeft = Math.max(0, x - 60);
@@ -1909,6 +1966,21 @@ onBeforeUnmount(() => {
 					@compositionstart="hideCompletion"
 					@compositionend="refreshCompletion"
 				/>
+				<!-- 透镜行：浮在 textarea 之上的不透明覆盖条（内容由外层 #lens 插槽提供）；
+				     随内容垂直滚动，水平方向固定；除插槽内芯片外点击穿透到 textarea -->
+				<div v-if="lensRows.length" class="lens-layer">
+					<div
+						v-for="row in lensRows"
+						:key="row.idx"
+						class="lens-row"
+						:style="{
+							top: `${row.top}px`,
+							height: `${lensStripH}px`,
+						}"
+					>
+						<slot name="lens" :line="row.line" :index="row.idx" />
+					</div>
+				</div>
 				<!-- 关键字补全面板：锚定光标；Tab 确认 / Esc 关闭 / ↑↓ 选择 -->
 				<div
 					v-if="completion"
@@ -2018,7 +2090,11 @@ onBeforeUnmount(() => {
 			<span class="status-spacer" />
 			<!-- 前缀扩展插槽：渲染在「字号: x」之前（如文档页的「最后编辑」） -->
 			<slot name="status-prefix" />
-			<span ref="fontWrapEl" class="status-menu-wrap">
+			<span
+				v-if="statusControls"
+				ref="fontWrapEl"
+				class="status-menu-wrap"
+			>
 				<button
 					type="button"
 					class="status-item status-btn"
@@ -2040,7 +2116,11 @@ onBeforeUnmount(() => {
 					</button>
 				</div>
 			</span>
-			<span v-if="!readonly" ref="indentWrapEl" class="status-menu-wrap">
+			<span
+				v-if="statusControls && !readonly"
+				ref="indentWrapEl"
+				class="status-menu-wrap"
+			>
 				<button
 					type="button"
 					class="status-item status-btn"
@@ -2062,8 +2142,14 @@ onBeforeUnmount(() => {
 					</button>
 				</div>
 			</span>
-			<span v-else class="status-item">空格: {{ indentSize }}</span>
-			<span ref="langWrapEl" class="status-menu-wrap">
+			<span v-else-if="statusControls" class="status-item"
+				>空格: {{ indentSize }}</span
+			>
+			<span
+				v-if="statusControls"
+				ref="langWrapEl"
+				class="status-menu-wrap"
+			>
 				<button
 					type="button"
 					class="status-item status-btn"
@@ -2326,6 +2412,32 @@ onBeforeUnmount(() => {
 .search-mark.is-current {
 	background: color-mix(in oklab, #ff9e64 55%, transparent);
 	box-shadow: 0 0 0 1px color-mix(in oklab, #ff9e64 90%, transparent);
+}
+
+/* 透镜行：浮在 textarea 之上的不透明覆盖条（z-index 低于补全/查找/状态栏菜单）。
+   容器与条带本身不响应指针，插槽内容之外的点击穿透到 textarea（仍可定位光标）；
+   插槽内的交互元素（如芯片按钮）需自行设置 pointer-events: auto。 */
+.lens-layer {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	z-index: 5;
+}
+
+.lens-row {
+	position: absolute;
+	left: 0;
+	right: 0;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 var(--ed-pad-x);
+	background: var(--ed-lens-bg, var(--background, var(--bg-app, #1b1d23)));
+	box-shadow: inset 0 -1px 0 var(--ed-border);
+	pointer-events: none;
+	white-space: nowrap;
+	overflow: hidden;
 }
 
 .code-lines {

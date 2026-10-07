@@ -26,7 +26,9 @@ func main() {
 			application.NewService(NewAiService(repoService)),
 		},
 		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
+			// 复合处理器：/gitview-file 直接返回仓库图片字节（见 repoimage.go），
+			// 其余请求交给默认的静态资源服务（生产=内嵌 dist，开发=代理到 vite）。
+			Handler: newRepoFileHandler(application.AssetFileServerFS(assets), repoService),
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,

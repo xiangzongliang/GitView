@@ -215,10 +215,21 @@ export interface TextMatch {
 
 /** 编辑器默认字号（px）：与应用标准字号（body font-size: 13px）一致 */
 export const CODER_DEFAULT_FONT_SIZE = 13;
-/** 可调字号下限（px） */
-export const CODER_MIN_FONT_SIZE = 10;
-/** 可调字号上限（px） */
-export const CODER_MAX_FONT_SIZE = 28;
+/** 可调字号下限（px）：与状态栏字号菜单的最小档位一致 */
+export const CODER_MIN_FONT_SIZE = 9;
+/** 可调字号上限（px）：与状态栏字号菜单的最大档位一致 */
+export const CODER_MAX_FONT_SIZE = 18;
+/** 状态栏字号菜单档位（px） */
+export const CODER_FONT_OPTIONS = [9, 10, 11, 12, 13, 14, 16, 18];
+
+/** 把字号吸附到最近的菜单档位（持久化的历史值可能不在当前档位表中） */
+export function snapFontOption(size: number): number {
+	let best = CODER_FONT_OPTIONS[0]!;
+	for (const o of CODER_FONT_OPTIONS) {
+		if (Math.abs(o - size) < Math.abs(best - size)) best = o;
+	}
+	return best;
+}
 
 /** 把字号约束到可调区间（非法值回退为默认字号） */
 export function clampFontSize(size: number | undefined | null): number {
@@ -231,6 +242,45 @@ export function clampFontSize(size: number | undefined | null): number {
  *  JS 度量与 CSS 变量 --ed-line-height 必须使用同一来源，避免错位。 */
 export function coderLineHeight(fontSize: number | undefined | null): number {
 	return Math.round(clampFontSize(fontSize) * 1.5);
+}
+
+// ---------- 视觉列宽（宽字符按 2 列计） ----------
+
+/**
+ * 码点是否为「全角/宽字符」：在等宽字体中占 2 个半角列宽。
+ * 覆盖 CJK 统一表意文字及扩展、假名、谚文、全角标点/拉丁、
+ * CJK 兼容区等主要双宽区段（East Asian Wide/Fullwidth 的常用子集）。
+ */
+export function isWideCodePoint(cp: number): boolean {
+	return (
+		(cp >= 0x1100 && cp <= 0x115f) || // 谚文字母 Jamo 初声
+		(cp >= 0x2e80 && cp <= 0x303e) || // CJK 部首、符号标点（U+303F 半宽除外）
+		(cp >= 0x3041 && cp <= 0x33ff) || // 假名、注音、CJK 兼容符号等
+		(cp >= 0x3400 && cp <= 0x4dbf) || // CJK 扩展 A
+		(cp >= 0x4e00 && cp <= 0x9fff) || // CJK 统一表意文字
+		(cp >= 0xa000 && cp <= 0xa4cf) || // 彝文
+		(cp >= 0xa960 && cp <= 0xa97f) || // 谚文字母 Jamo 扩展 A
+		(cp >= 0xac00 && cp <= 0xd7a3) || // 谚文音节
+		(cp >= 0xf900 && cp <= 0xfaff) || // CJK 兼容表意文字
+		(cp >= 0xfe10 && cp <= 0xfe19) || // 竖排形式
+		(cp >= 0xfe30 && cp <= 0xfe6f) || // CJK 兼容形式、小写变体
+		(cp >= 0xff00 && cp <= 0xff60) || // 全角形式（ASCII/标点）
+		(cp >= 0xffe0 && cp <= 0xffe6) || // 全角货币符号等
+		(cp >= 0x16fe0 && cp <= 0x16fe4) || // 表意文字描述符等
+		(cp >= 0x17000 && cp <= 0x18cd5) || // 西夏文、女书
+		(cp >= 0x1b000 && cp <= 0x1b2fb) || // 假名变体、努鲁文
+		(cp >= 0x20000 && cp <= 0x3fffd) // CJK 扩展 B 及以后、兼容补充
+	);
+}
+
+/**
+ * 单个字符（或码点）在等宽排版下占的视觉列数：宽字符 2 列，其余 1 列。
+ * 传入代理对的一半（孤立代理）时按 1 列计——一对恰好合计 2 列，
+ * 与扩展 B 区宽字符的实际宽度一致，因此按 UTF-16 单元逐位累加也正确。
+ */
+export function charCols(ch: string): number {
+	const cp = ch.codePointAt(0);
+	return cp !== undefined && isWideCodePoint(cp) ? 2 : 1;
 }
 
 /** 查找全部匹配（大小写可选） */

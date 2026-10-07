@@ -22,7 +22,9 @@ import {
 } from "../../ai/prompts";
 import FileList from "./FileList.vue";
 import DiffViewer from "../common/DiffViewer.vue";
+import ImageDiffViewer from "../common/ImageDiffViewer.vue";
 import ConflictResolver from "./ConflictResolver.vue";
+import { isImageFile } from "../../utils/format";
 import Icon from "../ui/Icon.vue";
 import Spinner from "../ui/Spinner.vue";
 import Checkbox from "../ui/Checkbox.vue";
@@ -80,6 +82,17 @@ const conflictedSelected = computed(() => {
 	const f = repo.selectedFile;
 	if (!f) return false;
 	return (repo.status?.conflicted || []).some((c) => c.path === f.path);
+});
+
+// 图片文件（含 SVG）右侧改用前后对比预览而非文本 diff；
+// SVG 可在预览内切换回源码差异。冲突文件仍优先用冲突解决器。
+const imageSelected = computed(() => {
+	const f = repo.selectedFile;
+	return !!f && isImageFile(f.path);
+});
+const selectedStatusChar = computed(() => {
+	const f = repo.selectedFile;
+	return f ? statusCharOf(f.path, f.group) : "M";
 });
 
 // 已提交但尚未推送的提交数（顶部 Push 按钮的角标同样取此值）
@@ -422,6 +435,15 @@ watch(
 		<ConflictResolver
 			v-if="conflictedSelected"
 			:path="repo.selectedFile!.path"
+		/>
+		<ImageDiffViewer
+			v-else-if="imageSelected"
+			:repo-path="repo.path"
+			:path="repo.selectedFile!.path"
+			:staged="repo.selectedFile!.staged"
+			:status="selectedStatusChar"
+			:raw="repo.fileDiff"
+			:loading="repo.fileDiffLoading"
 		/>
 		<DiffViewer
 			v-else
