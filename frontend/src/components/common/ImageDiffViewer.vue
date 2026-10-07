@@ -13,52 +13,85 @@ const props = withDefaults(
 		repoPath: string;
 		/** 文件在仓库内的相对路径 */
 		path: string;
-		/** 暂存视图：前=HEAD、后=index；未暂存：前=index、后=worktree */
+		/** 暂存视图：前=HEAD、后=index；未暂存：前=index、后=worktree（提交模式下忽略） */
 		staged: boolean;
-		/** porcelain 状态字符（M A D R C T U ?），用于判断前/后版本是否存在 */
+		/** 状态字符：工作区为 porcelain（M A D R C T U ?），提交视图为 A M D R C */
 		status: string;
-		/** SVG 源码模式的差异文本（即状态视图已加载的 fileDiff） */
+		/** SVG 源码模式的差异文本（调用方已加载的 diff） */
 		raw?: string;
 		loading?: boolean;
+		/** 提交模式：传入当前查看的 commit hash 即启用（历史提交视图） */
+		hash?: string;
+		/** 提交模式的父提交 hash；根提交传 ""（无修改前版本） */
+		parentHash?: string;
+		/** 提交模式下重命名/复制的源路径（修改前版本取该路径的文件） */
+		oldPath?: string;
 	}>(),
-	{ raw: "", loading: false },
+	{ raw: "", loading: false, hash: "", parentHash: "", oldPath: "" },
 );
 
-// ref 语义与 WorktreeDiff（gitservice.go）保持一致：
-//   staged   → git diff --staged → 前=HEAD、后=index
-//   unstaged → git diff          → 前=index、后=worktree
-//   untracked(?) → 新文件，只有 worktree 版本
-const isAdded = computed(() => props.status === "?" || props.status === "A");
+// 提交模式（历史提交视图）：前=父提交版本、后=当前提交版本
+const commitMode = computed(() => !!props.hash);
+
+// ref 语义：
+//   工作区模式与 WorktreeDiff（gitservice.go）保持一致：
+//     staged   → git diff --staged → 前=HEAD、后=index
+//     unstaged → git diff          → 前=index、后=worktree
+//     untracked(?) → 新文件，只有 worktree 版本
+//   提交模式：前=<parentHash>（根提交无）、后=<hash>
+const isAdded = computed(() =>
+	commitMode.value
+		? props.status === "A"
+		: props.status === "?" || props.status === "A",
+);
 const isDeleted = computed(() => props.status === "D");
 
 const beforeRef = computed<string | null>(() => {
+	if (commitMode.value)
+		return props.parentHash && !isAdded.value ? props.parentHash : null;
 	if (isAdded.value) return null;
 	return props.staged ? "head" : "index";
 });
 const afterRef = computed<string | null>(() => {
 	if (isDeleted.value) return null;
+	if (commitMode.value) return props.hash;
 	if (props.status === "?") return "worktree";
 	return props.staged ? "index" : "worktree";
 });
 
-function imageUrl(refName: string): string {
+// 重命名/复制时修改前版本存放在源路径下（git show <parent>:<oldPath>）
+const beforePath = computed(() =>
+	commitMode.value && props.oldPath ? props.oldPath : props.path,
+);
+
+function imageUrl(refName: string, path: string): string {
 	const q = new URLSearchParams();
 	q.set("repo", props.repoPath);
-	q.set("path", props.path);
+	q.set("path", path);
 	q.set("ref", refName);
 	return "/gitview-file?" + q.toString();
 }
 
 const beforeUrl = computed(() =>
-	beforeRef.value ? imageUrl(beforeRef.value) : "",
+	beforeRef.value ? imageUrl(beforeRef.value, beforePath.value) : "",
 );
-const afterUrl = computed(() => (afterRef.value ? imageUrl(afterRef.value) : ""));
+const afterUrl = computed(() =>
+	afterRef.value ? imageUrl(afterRef.value, props.path) : "",
+);
 
 // 加载失败（该版本不存在、无法解码等）→ 原位显示提示
 const beforeFailed = ref(false);
 const afterFailed = ref(false);
 watch(
-	() => [props.repoPath, props.path, props.staged, props.status],
+	() => [
+		props.repoPath,
+		props.path,
+		props.staged,
+		props.status,
+		props.hash,
+		props.parentHash,
+		props.oldPath,
+	],
 	() => {
 		beforeFailed.value = false;
 		afterFailed.value = false;
@@ -69,7 +102,7 @@ watch(
 const isSvg = computed(() => isSvgFile(props.path));
 const showCode = ref(false);
 watch(
-	() => props.path,
+	() => [props.path, props.hash],
 	() => {
 		showCode.value = false;
 	},
@@ -93,7 +126,11 @@ const showImages = computed(() => !isSvg.value || !showCode.value);
 				class="mode-toggle"
 				title="切换 SVG 浏览方式：关 = 图片效果，开 = 源码差异"
 			>
-				<input v-model="showCode" type="checkbox" class="toggle-input" />
+				<input
+					v-model="showCode"
+					type="checkbox"
+					class="toggle-input"
+				/>
 				<span class="toggle-track"><span class="toggle-thumb" /></span>
 				<span class="toggle-label">源码</span>
 			</label>

@@ -8,14 +8,27 @@ import {
 	statusColor,
 	basename,
 	dirname,
+	isImageFile,
 } from "../../utils/format";
 import Icon from "../ui/Icon.vue";
 import RefChips from "../common/RefChips.vue";
 import DiffViewer from "../common/DiffViewer.vue";
+import ImageDiffViewer from "../common/ImageDiffViewer.vue";
 
 const repo = useRepo();
 
 const c = computed(() => repo.selectedCommit);
+
+// 当前选中的提交文件与图片预览（与状态视图一致，SVG 可切换源码/预览）
+const selectedCommitFile = computed(
+	() => repo.commitFiles.find((f) => f.path === repo.commitFile) || null,
+);
+const imageSelected = computed(() => {
+	const f = selectedCommitFile.value;
+	return !!f && isImageFile(f.path);
+});
+// 根提交无父提交，传 "" 表示无修改前版本
+const parentHash = computed(() => c.value?.parents?.[0] || "");
 
 // 文件列表宽度可拖拽调整（与右侧差异区之间的分割线），带最小/最大限制并持久化
 const FILES_W_KEY = "gv.commitFilesW";
@@ -176,7 +189,20 @@ function statusTitle(ch: string): string {
 					title="拖动调整文件列表宽度"
 					@mousedown="startFilesDrag"
 				/>
+				<ImageDiffViewer
+					v-if="imageSelected"
+					:repo-path="repo.path"
+					:path="repo.commitFile"
+					:staged="false"
+					:status="selectedCommitFile!.status"
+					:hash="repo.selectedHash"
+					:parent-hash="parentHash"
+					:old-path="selectedCommitFile!.oldPath || ''"
+					:raw="repo.commitDiff"
+					:loading="repo.detailLoading"
+				/>
 				<DiffViewer
+					v-else
 					:raw="repo.commitDiff"
 					:loading="repo.detailLoading"
 					:filename="repo.commitFile"
