@@ -48,31 +48,14 @@ function initPos() {
 onMounted(initPos);
 
 // ---- maximize / restore ----
+// 最大化时面板的几何完全交给 CSS（100vw / 100vh）处理，这里只维护一个开关：
+// 不再写入 px 内联尺寸，因此应用窗口全屏或缩放时弹窗会自动跟随，无需监听 resize；
+// 还原时也无需恢复位置——最大化期间内联值从未被改动，拖拽 / 缩放同样被禁用。
 const maximized = ref(false);
-// 保存最大化前的位置和大小
-const savedPos = reactive({ x: 0, y: 0, w: 0, h: 0 });
 
 function toggleMaximize() {
 	if (!props.resizable) return;
-	if (maximized.value) {
-		// 还原
-		panelPos.x = savedPos.x;
-		panelPos.y = savedPos.y;
-		panelW.value = savedPos.w;
-		panelH.value = savedPos.h;
-		maximized.value = false;
-	} else {
-		// 保存当前状态后最大化
-		savedPos.x = panelPos.x;
-		savedPos.y = panelPos.y;
-		savedPos.w = panelW.value;
-		savedPos.h = panelH.value || panelRef.value?.offsetHeight || 400;
-		panelPos.x = 0;
-		panelPos.y = 0;
-		panelW.value = window.innerWidth;
-		panelH.value = window.innerHeight;
-		maximized.value = true;
-	}
+	maximized.value = !maximized.value;
 }
 
 // ---- drag ----
@@ -176,17 +159,15 @@ onBeforeUnmount(() => {
 
 const panelStyle = computed(() => {
 	if (!interactive.value) return { width: props.width + "px" };
+	// 最大化：不下发任何内联几何样式，全部交给 .modal-panel--maximized。
+	// 内联 px 的优先级高于类样式，一旦下发就会锁死尺寸、无法跟随窗口变化。
+	if (maximized.value) return {};
 	const s: Record<string, string> = {
 		left: panelPos.x + "px",
 		top: panelPos.y + "px",
 		width: panelW.value + "px",
 	};
 	if (panelH.value > 0) s.height = panelH.value + "px";
-	// 最大化时去掉圆角和阴影，看起来像贴边窗口
-	if (maximized.value) {
-		s.borderRadius = "0";
-		s.boxShadow = "none";
-	}
 	return s;
 });
 </script>
@@ -294,6 +275,19 @@ const panelStyle = computed(() => {
 		opacity: 0;
 		transform: translateY(-10px) scale(0.97);
 	}
+}
+/* 最大化：尺寸直接使用视口单位，应用窗口全屏 / 缩放时自动跟随，
+   不依赖任何 JS 计算或 resize 监听。
+   html、body 均为 overflow:hidden，所以 100vw 不含滚动条宽度，是真实视口宽。 */
+.modal-panel--maximized {
+	left: 0;
+	top: 0;
+	width: 100vw;
+	height: 100vh;
+	max-width: none;
+	max-height: none;
+	border-radius: 0;
+	box-shadow: none;
 }
 .modal-panel--maximized .modal-head {
 	display: grid;

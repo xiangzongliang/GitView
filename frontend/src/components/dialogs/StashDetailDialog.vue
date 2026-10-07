@@ -328,7 +328,6 @@ onMounted(load);
 					<span class="btn-cmd-hint">git stash drop</span>
 				</button>
 			</template>
-			<button class="btn" @click="emit('close')">关闭</button>
 		</template>
 	</ModalDialog>
 </template>
