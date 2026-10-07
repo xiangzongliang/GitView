@@ -79,7 +79,8 @@ const defaultMsg = computed(
 );
 watch(target, (B) => {
 	if (!msgEdited.value) message.value = B ? defaultMsg.value : "";
-	void refreshMergeCommits();
+	// 先同步目标分支到最新，再刷新待合并提交与合并差异
+	void syncAndRefresh(B);
 });
 
 // ------------------------------------------------- 待合并提交（B..A）与 AI 归纳
@@ -115,10 +116,148 @@ async function refreshMergeCommits() {
 		if (gen === commitsGen) commitsLoading.value = false;
 	}
 }
-void refreshMergeCommits();
 
 const commitCount = computed(() => mergeCommits.value?.length ?? -1);
 const nothingToMerge = computed(() => commitCount.value === 0);
+
+// ------------------------------------------- 目标分支同步（不切分支快进 B）
+
+/** setup 阶段展示的同步命令日志（复用 StepEntry 与 step-log 样式）。 */
+const syncSteps = ref<StepEntry[]>([]);
+const syncLogEl = ref<HTMLElement | null>(null);
+const syncing = ref(false);
+const syncFailed = ref(false);
+let syncSeq = 0;
+/** 丢弃过期的并发同步（快速切换目标分支时） */
+let syncGen = 0;
+
+function scrollSyncLog() {
+	nextTick(() => {
+		const el = syncLogEl.value;
+		if (el) el.scrollTop = el.scrollHeight;
+	});
+}
+
+/** 与 runStep 相同，但日志写入 setup 阶段的同步日志区。 */
+async function runSyncStep(
+	title: string,
+	args: string[],
+	network: boolean,
+): Promise<GitStepResult | null> {
+	syncSteps.value.push({
+		id: syncSeq++,
+		title,
+		kind: "cmd",
+		state: "running",
+	});
+	// 取回数组内的响应式代理再改，直接改 push 进去的原始对象不会触发更新
+	const entry = syncSteps.value[syncSteps.value.length - 1];
+	scrollSyncLog();
+	try {
+		const res = await GitService.RunGitStep(repo.path, args, network);
+		if (!res) throw new Error("后端未返回执行结果");
+		entry.command = res.command;
+		entry.output = res.output;
+		entry.error = res.ok ? "" : res.error;
+		entry.state = res.ok ? "ok" : "fail";
+		scrollSyncLog();
+		return res;
+	} catch (e) {
+		entry.command = "git " + args.join(" ");
+		entry.error = errMsg(e);
+		entry.state = "fail";
+		scrollSyncLog();
+		return null;
+	}
+}
+
+/**
+ * 同步目标分支 B：不切分支，把本地 B 快进到其上游
+ * （git fetch <remote> <B>:<B>），保证后续 B..A 的提交列表
+ * 与合并差异基于最新代码。失败（如本地与远程分叉）不阻塞，仅提示；
+ * 真正合并时的 checkout + pull 会再次校验。
+ */
+async function syncTargetBranch(B: string) {
+	const gen = ++syncGen;
+	syncSteps.value = [];
+	syncFailed.value = false;
+	if (!B || phase.value !== "setup") return;
+	const info = (repo.refs?.branches || []).find(
+		(b) => !b.isRemote && b.name === B,
+	);
+	const remotes = repo.refs?.remotes || [];
+	const remote = info?.tracking
+		? info.tracking.split("/")[0]
+		: remotes[0]?.name || "";
+	const hasUpstream = !!info?.tracking && !info.gone;
+	if (!remote || !hasUpstream) {
+		syncSteps.value.push({
+			id: syncSeq++,
+			title: "跳过同步",
+			kind: "note",
+			state: "info",
+			output: !remote
+				? "仓库没有配置远程"
+				: `${B} 没有配置上游分支，无法从远程更新`,
+		});
+		return;
+	}
+	syncing.value = true;
+	try {
+		const r = await runSyncStep(
+			`同步目标分支 ${B}（从 ${remote} 快进本地引用，不切分支）`,
+			["fetch", remote, `${B}:${B}`],
+			true,
+		);
+		if (gen !== syncGen) return;
+		if (!r || !r.ok) syncFailed.value = true;
+	} finally {
+		if (gen === syncGen) syncing.value = false;
+	}
+}
+
+// ------------------------------------------------ 合并差异预览（B...A）
+
+const diffStat = ref("");
+const diffLoading = ref(false);
+const diffError = ref("");
+/** 丢弃过期的并发请求（快速切换目标分支时） */
+let diffGen = 0;
+
+async function refreshDiff() {
+	const gen = ++diffGen;
+	const A = source.value;
+	const B = target.value;
+	diffStat.value = "";
+	diffError.value = "";
+	if (!A || !B || phase.value !== "setup") return;
+	diffLoading.value = true;
+	try {
+		const res = await GitService.RunGitStep(
+			repo.path,
+			["diff", "--stat", `${B}...${A}`],
+			false,
+		);
+		if (gen !== diffGen) return;
+		if (!res) throw new Error("后端未返回执行结果");
+		if (!res.ok) {
+			diffError.value = res.error || "读取差异失败";
+			return;
+		}
+		diffStat.value = (res.output || "").trim();
+	} catch (e) {
+		if (gen === diffGen) diffError.value = errMsg(e);
+	} finally {
+		if (gen === diffGen) diffLoading.value = false;
+	}
+}
+
+/** 选中目标分支后：先把 B 同步到最新，再刷新待合并提交与合并差异。 */
+async function syncAndRefresh(B: string) {
+	await syncTargetBranch(B);
+	await Promise.all([refreshMergeCommits(), refreshDiff()]);
+}
+void syncAndRefresh(target.value);
 
 // AI 模型选择：与提交信息生成一致，记住上次选择、失效时回退到第一个可用模型。
 const AI_MODEL_KEY = "gv.aiMergeModel";
@@ -581,6 +720,57 @@ function attemptClose() {
 				<Icon name="alert" :size="13" /> {{ readyError }}
 			</div>
 
+			<!-- 同步目标分支：不切分支把本地 B 快进到上游，命令与输出在此展示 -->
+			<div v-if="target && syncSteps.length" class="field">
+				<span class="label">
+					同步目标分支 {{ target }}
+					<Spinner v-if="syncing" :size="10" />
+					<template v-else-if="syncFailed">（同步失败）</template>
+				</span>
+				<div v-if="syncFailed" class="hint err">
+					无法把本地
+					{{ target }}
+					快进到远程（可能与远程有分叉），下方提交列表基于本地
+					{{ target }}；开始合并后的 pull 步骤会再次校验
+				</div>
+				<div ref="syncLogEl" class="step-log compact">
+					<div
+						v-for="s in syncSteps"
+						:key="s.id"
+						class="step"
+						:class="[s.state, s.kind]"
+					>
+						<div class="step-head">
+							<span class="step-icon">
+								<Spinner
+									v-if="s.state === 'running'"
+									:size="12"
+								/>
+								<Icon
+									v-else-if="s.state === 'ok'"
+									name="check"
+									:size="13"
+								/>
+								<Icon
+									v-else-if="s.state === 'fail'"
+									name="x"
+									:size="13"
+								/>
+								<Icon v-else name="info" :size="13" />
+							</span>
+							<span class="step-title">{{ s.title }}</span>
+						</div>
+						<code v-if="s.command" class="step-cmd">{{
+							s.command
+						}}</code>
+						<pre v-if="s.output" class="step-out">{{
+							s.output
+						}}</pre>
+						<pre v-if="s.error" class="step-err">{{ s.error }}</pre>
+					</div>
+				</div>
+			</div>
+
 			<!-- 待合并提交概览 -->
 			<div v-if="target" class="field">
 				<span class="label">
@@ -651,6 +841,24 @@ function attemptClose() {
 				<div v-if="aiError" class="hint err">{{ aiError }}</div>
 			</div>
 
+			<!-- 合并差异预览（基于 merge-base，显示 A 将带入 B 的文件变更） -->
+			<div v-if="target" class="field">
+				<span class="label">
+					合并差异（{{ source }} → {{ target }}）
+					<Spinner v-if="diffLoading" :size="10" />
+				</span>
+				<code class="diff-cmd"
+					>git diff --stat {{ target }}...{{ source }}</code
+				>
+				<div v-if="diffError" class="hint err">
+					读取差异失败：{{ diffError }}
+				</div>
+				<div v-else-if="!diffLoading && !diffStat" class="hint">
+					没有文件差异
+				</div>
+				<pre v-else class="diff-stat">{{ diffStat }}</pre>
+			</div>
+
 			<label class="check">
 				<Checkbox v-model="noFF" />
 				总是生成合并提交（--no-ff）
@@ -661,8 +869,10 @@ function attemptClose() {
 			</label>
 
 			<div class="hint steps-hint">
-				执行步骤：checkout {{ target || "B" }} → fetch → pull → merge
-				{{ source || "A" }} → push → checkout
+				打开对话框时已先把
+				{{ target || "目标分支" }} 同步到最新；执行步骤：checkout
+				{{ target || "B" }} → fetch → pull → merge {{ source || "A" }} →
+				push → checkout
 				{{
 					source || "A"
 				}}，每步的命令与输出都会显示出来；冲突时会暂停等你解决。
@@ -1015,6 +1225,33 @@ function attemptClose() {
 	line-height: 1.55;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
+}
+.step-log.compact {
+	min-height: 0;
+	max-height: 220px;
+}
+.diff-cmd {
+	display: block;
+	margin: 6px 0;
+	font-family: var(--font-mono, monospace);
+	font-size: 11px;
+	color: var(--accent);
+}
+.diff-stat {
+	margin: 0;
+	padding: 6px 9px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: var(--term-bg);
+	color: var(--text);
+	font-family: var(--font-mono, monospace);
+	font-size: 10.5px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 220px;
+	overflow-y: auto;
+	user-select: text;
 }
 .close-hint {
 	margin-right: auto;
