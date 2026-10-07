@@ -123,7 +123,11 @@ const isEmpty = computed(
 					二进制文件，无法显示差异
 				</div>
 				<div v-else class="diff-table">
-					<template v-for="(h, hi) in f.hunks" :key="hi">
+					<div
+						v-for="(h, hi) in f.hunks"
+						:key="hi"
+						class="diff-hunk-chunk"
+					>
 						<div class="diff-row hunk">
 							<span class="ln" />
 							<span class="ln" />
@@ -151,7 +155,7 @@ const isEmpty = computed(
 								<span v-if="l.html" v-html="l.html" />
 							</span>
 						</div>
-					</template>
+					</div>
 					<div v-if="f.truncated" class="diff-binary">
 						内容过长，已截断显示（前 {{ MAX_LINES }} 行）
 					</div>
@@ -205,6 +209,11 @@ const isEmpty = computed(
 	font-family: var(--font-mono);
 	font-size: 11.5px;
 	line-height: 1.55;
+}
+/* 每个 hunk 用 content-visibility: auto 包裹，浏览器自动跳过离屏内容渲染 */
+.diff-hunk-chunk {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 500px;
 }
 .diff-row {
 	display: grid;

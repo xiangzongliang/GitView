@@ -22,6 +22,7 @@ import {
 } from "../../ai/prompts";
 import FileList from "./FileList.vue";
 import DiffViewer from "../common/DiffViewer.vue";
+import ConflictResolver from "./ConflictResolver.vue";
 import Icon from "../ui/Icon.vue";
 import Spinner from "../ui/Spinner.vue";
 import Checkbox from "../ui/Checkbox.vue";
@@ -72,6 +73,14 @@ const canCommit = computed(
 		(stagedCount.value > 0 || (repo.amend && !!repo.status?.head)),
 );
 const merging = computed(() => !!repo.status?.merging);
+
+// 选中的文件仍是冲突状态时，用冲突解决器（三方合并）替代普通 diff 视图；
+// 依据实时 status 判定，冲突解决并暂存后会自动切回 diff 视图
+const conflictedSelected = computed(() => {
+	const f = repo.selectedFile;
+	if (!f) return false;
+	return (repo.status?.conflicted || []).some((c) => c.path === f.path);
+});
 
 // 已提交但尚未推送的提交数（顶部 Push 按钮的角标同样取此值）
 const ahead = computed(() => repo.status?.ahead || 0);
@@ -410,7 +419,12 @@ watch(
 			title="拖动调整左侧宽度"
 			@mousedown="startLeftDrag"
 		/>
+		<ConflictResolver
+			v-if="conflictedSelected"
+			:path="repo.selectedFile!.path"
+		/>
 		<DiffViewer
+			v-else
 			:raw="repo.fileDiff"
 			:loading="repo.fileDiffLoading"
 			:filename="repo.selectedFile?.path"

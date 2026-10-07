@@ -43,6 +43,24 @@ type FileStatus struct {
 	Conflicted bool   `json:"conflicted"`
 }
 
+// ConflictSide is one side (base / ours / theirs) of a conflicted file.
+// Exists is false when the file is absent on that side (added/deleted conflict).
+type ConflictSide struct {
+	Label   string `json:"label"`
+	Exists  bool   `json:"exists"`
+	Content string `json:"content"`
+}
+
+// ConflictDetail feeds the 3-way merge editor: the three index stages of a
+// conflicted file plus the current worktree content (with conflict markers).
+type ConflictDetail struct {
+	Base     ConflictSide `json:"base"`
+	Ours     ConflictSide `json:"ours"`
+	Theirs   ConflictSide `json:"theirs"`
+	Worktree string       `json:"worktree"`
+	Binary   bool         `json:"binary"`
+}
+
 // RepoStatus is a snapshot of the working tree / index state.
 type RepoStatus struct {
 	Branch        string       `json:"branch"`

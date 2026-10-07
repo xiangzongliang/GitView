@@ -72,6 +72,14 @@ export function CommitFiles(repoPath: string, hash: string): $CancellablePromise
 }
 
 /**
+ * ConflictDetail returns the three index stages and the current worktree
+ * content of a conflicted file, feeding the 3-way merge editor.
+ */
+export function ConflictDetail(repoPath: string, file: string): $CancellablePromise<$models.ConflictDetail | null> {
+    return $Call.ByID(3032214718, repoPath, file);
+}
+
+/**
  * CreateBranch creates a branch (and optionally checks it out).
  */
 export function CreateBranch(repoPath: string, opts: $models.BranchOptions): $CancellablePromise<void> {
@@ -231,6 +239,16 @@ export function Reset(repoPath: string, target: string, mode: string): $Cancella
 }
 
 /**
+ * ResolveConflictTakeSide resolves a conflicted file by keeping one side
+ * ("ours" = stage 2 / "theirs" = stage 3) and staging the result. When the
+ * chosen side does not exist (added/deleted conflict), the file is removed and
+ * the removal staged instead.
+ */
+export function ResolveConflictTakeSide(repoPath: string, file: string, side: string): $CancellablePromise<void> {
+    return $Call.ByID(4055266793, repoPath, file, side);
+}
+
+/**
  * Revert creates a commit undoing the given commit.
  */
 export function Revert(repoPath: string, hash: string): $CancellablePromise<void> {
@@ -336,12 +354,14 @@ export function StashClear(repoPath: string): $CancellablePromise<void> {
 }
 
 /**
- * StashDiff returns the diff of one file inside a stash entry. Untracked
+ * StashDiff returns the diff of one file inside a stash entry.
+ * When fullFile is true, all context lines are included (effectively
+ * showing the entire file with changes highlighted). Untracked
  * files (stashed with -u) have no tracked diff; their content is read from
  * the stash's third parent and synthesized into a new-file patch.
  */
-export function StashDiff(repoPath: string, index: number, file: string): $CancellablePromise<string> {
-    return $Call.ByID(573870921, repoPath, index, file);
+export function StashDiff(repoPath: string, index: number, file: string, fullFile: boolean): $CancellablePromise<string> {
+    return $Call.ByID(573870921, repoPath, index, file, fullFile);
 }
 
 /**
@@ -431,4 +451,12 @@ export function WatchStatus(): $CancellablePromise<$models.WatchStatus | null> {
  */
 export function WorktreeDiff(repoPath: string, file: string, staged: boolean): $CancellablePromise<string> {
     return $Call.ByID(108931279, repoPath, file, staged);
+}
+
+/**
+ * WriteWorktreeFile overwrites one working-tree file with the given content.
+ * Used by the conflict editor to save resolved files.
+ */
+export function WriteWorktreeFile(repoPath: string, file: string, content: string): $CancellablePromise<void> {
+    return $Call.ByID(4195421911, repoPath, file, content);
 }

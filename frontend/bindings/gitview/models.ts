@@ -190,6 +190,28 @@ export interface CommitOptions {
 }
 
 /**
+ * ConflictDetail feeds the 3-way merge editor: the three index stages of a
+ * conflicted file plus the current worktree content (with conflict markers).
+ */
+export interface ConflictDetail {
+    "base": ConflictSide;
+    "ours": ConflictSide;
+    "theirs": ConflictSide;
+    "worktree": string;
+    "binary": boolean;
+}
+
+/**
+ * ConflictSide is one side (base / ours / theirs) of a conflicted file.
+ * Exists is false when the file is absent on that side (added/deleted conflict).
+ */
+export interface ConflictSide {
+    "label": string;
+    "exists": boolean;
+    "content": string;
+}
+
+/**
  * FileStatus describes one changed file in the index or worktree.
  */
 export interface FileStatus {

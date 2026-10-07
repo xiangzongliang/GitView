@@ -25,6 +25,8 @@ export type {
     Commit,
     CommitFile,
     CommitOptions,
+    ConflictDetail,
+    ConflictSide,
     FileStatus,
     GitLogEntry,
     GitStepResult,

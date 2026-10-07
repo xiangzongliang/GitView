@@ -28,7 +28,7 @@ const logFormat = "%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%D%x1f%s%x1f%b%x1e"
 // Status returns the working tree / index state of the repository.
 func (s *GitService) Status(repoPath string) (*RepoStatus, error) {
 	// runGitRO：不写 index（否则会与仓库监听形成自激刷新循环）
-	out, err := runGitRO(repoPath, "-c", "core.quotepath=false", "status", "--porcelain=v1", "-z", "--branch")
+	out, err := runGitRO(repoPath, "-c", "core.quotepath=false", "status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all")
 	if err != nil {
 		return nil, err
 	}
@@ -794,6 +794,176 @@ func isBinaryData(data []byte) bool {
 }
 
 // ---------------------------------------------------------------------------
+// Conflict resolution
+// ---------------------------------------------------------------------------
+
+// stageContent reads one index stage of a conflicted file
+// (":1:" base, ":2:" ours, ":3:" theirs). ok=false when that stage is absent
+// (added/deleted conflicts leave one side missing).
+func stageContent(repoPath, file string, stage int) (string, bool) {
+	out, err := runGitRO(repoPath, "show", fmt.Sprintf(":%d:%s", stage, file))
+	if err != nil {
+		return "", false
+	}
+	return out, true
+}
+
+// describeRevision finds a short human name for a hash (branch / tag),
+// falling back to the abbreviated hash.
+func describeRevision(repoPath, hash string) string {
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return ""
+	}
+	if out, err := runGitRO(repoPath, "name-rev", "--name-only", hash); err == nil {
+		if n := strings.TrimSpace(out); n != "" && !strings.Contains(n, "undefined") {
+			return n
+		}
+	}
+	if len(hash) > 7 {
+		return hash[:7]
+	}
+	return hash
+}
+
+// conflictLabels derives display labels for the ours/theirs sides based on
+// the operation currently in progress (merge / rebase / cherry-pick / revert).
+func conflictLabels(repoPath string) (ours, theirs string) {
+	ours, theirs = "HEAD", "MERGE_HEAD"
+	if out, err := runGitRO(repoPath, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+		if b := strings.TrimSpace(out); b != "" && b != "HEAD" {
+			ours = b
+		}
+	}
+	gd, err := gitDir(repoPath)
+	if err != nil {
+		return
+	}
+	readHeadFile := func(name string) string {
+		data, err := os.ReadFile(filepath.Join(gd, name))
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(data))
+	}
+	switch {
+	case pathExists(filepath.Join(gd, "MERGE_HEAD")):
+		if name := describeRevision(repoPath, readHeadFile("MERGE_HEAD")); name != "" {
+			theirs = name
+		}
+	case pathExists(filepath.Join(gd, "rebase-merge")), pathExists(filepath.Join(gd, "rebase-apply")):
+		// rebase 重放时：stage2（ours）是新基底一侧，stage3（theirs）是正在重放的提交
+		ours = "HEAD (rebase)"
+		if n := readHeadFile(filepath.Join("rebase-merge", "head-name")); n != "" {
+			theirs = strings.TrimPrefix(n, "refs/heads/")
+		} else {
+			theirs = "rebase"
+		}
+	case pathExists(filepath.Join(gd, "CHERRY_PICK_HEAD")):
+		if h := readHeadFile("CHERRY_PICK_HEAD"); h != "" {
+			theirs = "cherry-pick " + h[:min(7, len(h))]
+		} else {
+			theirs = "cherry-pick"
+		}
+	case pathExists(filepath.Join(gd, "REVERT_HEAD")):
+		if h := readHeadFile("REVERT_HEAD"); h != "" {
+			theirs = "revert " + h[:min(7, len(h))]
+		} else {
+			theirs = "revert"
+		}
+	}
+	return ours, theirs
+}
+
+// ConflictDetail returns the three index stages and the current worktree
+// content of a conflicted file, feeding the 3-way merge editor.
+func (s *GitService) ConflictDetail(repoPath string, file string) (*ConflictDetail, error) {
+	if strings.TrimSpace(file) == "" {
+		return nil, errors.New("文件路径不能为空")
+	}
+	detail := &ConflictDetail{
+		Base:   ConflictSide{Label: "共同祖先", Exists: false},
+		Ours:   ConflictSide{Label: "HEAD", Exists: false},
+		Theirs: ConflictSide{Label: "MERGE_HEAD", Exists: false},
+	}
+	if c, ok := stageContent(repoPath, file, 1); ok {
+		detail.Base = ConflictSide{Label: "共同祖先", Exists: true, Content: c}
+	}
+	oursLabel, theirsLabel := conflictLabels(repoPath)
+	if c, ok := stageContent(repoPath, file, 2); ok {
+		detail.Ours = ConflictSide{Label: oursLabel, Exists: true, Content: c}
+	} else {
+		detail.Ours.Label = oursLabel
+	}
+	if c, ok := stageContent(repoPath, file, 3); ok {
+		detail.Theirs = ConflictSide{Label: theirsLabel, Exists: true, Content: c}
+	} else {
+		detail.Theirs.Label = theirsLabel
+	}
+	if full, err := secureWorktreePath(repoPath, file); err == nil {
+		if data, err := os.ReadFile(full); err == nil {
+			detail.Worktree = string(data)
+			detail.Binary = isBinaryData(data)
+		}
+	}
+	return detail, nil
+}
+
+// secureWorktreePath joins repoPath + file and rejects escapes outside the
+// repository ("..", absolute paths, …).
+func secureWorktreePath(repoPath, file string) (string, error) {
+	root, err := filepath.Abs(repoPath)
+	if err != nil {
+		return "", err
+	}
+	abs, err := filepath.Abs(filepath.Join(repoPath, filepath.FromSlash(file)))
+	if err != nil {
+		return "", err
+	}
+	if abs != filepath.Clean(root) && !strings.HasPrefix(abs, filepath.Clean(root)+string(os.PathSeparator)) {
+		return "", errors.New("非法的文件路径")
+	}
+	return abs, nil
+}
+
+// WriteWorktreeFile overwrites one working-tree file with the given content.
+// Used by the conflict editor to save resolved files.
+func (s *GitService) WriteWorktreeFile(repoPath string, file string, content string) error {
+	if strings.TrimSpace(file) == "" {
+		return errors.New("文件路径不能为空")
+	}
+	full, err := secureWorktreePath(repoPath, file)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(full, []byte(content), 0o644)
+}
+
+// ResolveConflictTakeSide resolves a conflicted file by keeping one side
+// ("ours" = stage 2 / "theirs" = stage 3) and staging the result. When the
+// chosen side does not exist (added/deleted conflict), the file is removed and
+// the removal staged instead.
+func (s *GitService) ResolveConflictTakeSide(repoPath string, file string, side string) error {
+	stage := 3
+	if side == "ours" {
+		stage = 2
+	}
+	content, ok := stageContent(repoPath, file, stage)
+	if !ok {
+		// 该侧不存在此文件：删除工作区文件并暂存删除（git rm 需 -f 才能处理冲突文件）
+		_, err := runGit(repoPath, "rm", "-q", "-f", "--", file)
+		return err
+	}
+	if err := s.WriteWorktreeFile(repoPath, file, content); err != nil {
+		return err
+	}
+	return s.Stage(repoPath, []string{file})
+}
+
+// ---------------------------------------------------------------------------
 // Branch operations
 // ---------------------------------------------------------------------------
 
@@ -1193,12 +1363,19 @@ func (s *GitService) StashFiles(repoPath string, index int) ([]CommitFile, error
 	return files, nil
 }
 
-// StashDiff returns the diff of one file inside a stash entry. Untracked
+// StashDiff returns the diff of one file inside a stash entry.
+// When fullFile is true, all context lines are included (effectively
+// showing the entire file with changes highlighted). Untracked
 // files (stashed with -u) have no tracked diff; their content is read from
 // the stash's third parent and synthesized into a new-file patch.
-func (s *GitService) StashDiff(repoPath string, index int, file string) (string, error) {
+func (s *GitService) StashDiff(repoPath string, index int, file string, fullFile bool) (string, error) {
 	ref := fmt.Sprintf("stash@{%d}", index)
-	out, err := runGitRO(repoPath, "-c", "core.quotepath=false", "diff", "--no-color", "--no-ext-diff", "-M", ref+"^1", ref, "--", file)
+	args := []string{"-c", "core.quotepath=false", "diff", "--no-color", "--no-ext-diff", "-M"}
+	if fullFile {
+		args = append(args, "-U1000000")
+	}
+	args = append(args, ref+"^1", ref, "--", file)
+	out, err := runGitRO(repoPath, args...)
 	if err != nil {
 		return "", err
 	}

@@ -22,6 +22,9 @@
 
 	--accent: #4c8dff;
 	--accent-hover: #6ba1ff;
+	/* 主题色半透明变体：静态回退值（settings store 会按用户所选主题色覆盖） */
+	--accent-soft: rgba(76, 141, 255, 0.2);
+	--accent-wash: rgba(76, 141, 255, 0.08);
 
 	--green: #46c26a;
 	--yellow: #e3b341;
@@ -66,6 +69,8 @@
 	--scrollbar-thumb: #454a55;
 	--scrollbar-thumb-hover: #5a6070;
 	--red-wash: rgba(240, 85, 77, 0.1);
+	/* 危险项 hover 底色：主题色的半透明版本，避免纯色过于刺眼（与 --accent-soft 同族） */
+	--red-soft: rgba(240, 85, 77, 0.18);
 	--welcome-grad-a: #232733;
 	--welcome-grad-b: #1c1f28;
 	--banner-merge-bg: #3a2f18;
@@ -164,6 +169,7 @@
 	--scrollbar-thumb: #c3c8d0;
 	--scrollbar-thumb-hover: #a6adb8;
 	--red-wash: rgba(207, 34, 46, 0.08);
+	--red-soft: rgba(207, 34, 46, 0.12);
 	--welcome-grad-a: #ffffff;
 	--welcome-grad-b: #e9edf3;
 	--banner-merge-bg: #fff3d6;

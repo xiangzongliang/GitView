@@ -128,20 +128,34 @@ function click(action?: () => void) {
 	color: var(--text);
 	text-align: left;
 	font-size: 12.5px;
+	transition:
+		background-color 0.12s ease,
+		color 0.12s ease;
 }
 .ctx-item:hover:not(:disabled) {
-	background: var(--accent);
-	color: #fff;
+	background: var(--accent-soft);
+	color: var(--text-strong);
 }
 .ctx-item:disabled {
 	opacity: 0.4;
 }
 .ctx-item.danger:hover:not(:disabled) {
-	background: var(--red);
+	background: var(--red-soft);
+	color: var(--red);
 }
 .ctx-icon {
 	flex: none;
 	opacity: 0.85;
+	transition: color 0.12s ease;
+}
+/* hover 时图标染上对应语义色，强化"这一项会被执行"的反馈 */
+.ctx-item:hover:not(:disabled) .ctx-icon {
+	color: var(--accent);
+	opacity: 1;
+}
+.ctx-item.danger:hover:not(:disabled) .ctx-icon {
+	color: var(--red);
+	opacity: 1;
 }
 .ctx-label {
 	flex: 1;
@@ -163,12 +177,13 @@ function click(action?: () => void) {
 	white-space: normal;
 	word-break: break-word;
 	opacity: 0.9;
+	transition: color 0.12s ease;
 }
 .ctx-item:hover:not(:disabled) .ctx-desc {
-	color: rgba(255, 255, 255, 0.78);
+	color: var(--text-dim);
 }
 .ctx-item.danger:hover:not(:disabled) .ctx-desc {
-	color: rgba(255, 255, 255, 0.78);
+	color: var(--text-dim);
 }
 .ctx-check {
 	flex: none;

@@ -22,6 +22,19 @@ const text = computed(() => {
 	}
 });
 
+/** 查看冲突：切到文件状态视图，并自动选中第一个冲突文件（默认三方合并视图） */
+function viewConflicts() {
+	repo.setView("status");
+	const first = repo.status?.conflicted?.[0];
+	if (first) {
+		repo.selectStatusFile({
+			path: first.path,
+			staged: false,
+			group: "conflicted",
+		});
+	}
+}
+
 async function abort() {
 	switch (op.value) {
 		case "merge":
@@ -58,11 +71,7 @@ async function abort() {
 			>
 				<Icon name="check" :size="12" /> 继续
 			</button>
-			<button
-				v-else-if="op === 'merge' || op === 'revert'"
-				class="btn"
-				@click="repo.setView('status')"
-			>
+			<button class="btn" @click="viewConflicts()">
 				<Icon name="file" :size="12" /> 查看冲突
 			</button>
 			<button class="btn btn-danger" @click="abort()">中止</button>
