@@ -23,6 +23,8 @@
             <string>12.0.0</string>
         <key>NSHighResolutionCapable</key>
             <string>true</string>
+        <key>UIDesignRequiresCompatibility</key>
+            <true/>
         <key>NSHumanReadableCopyright</key>
             <string>© 2026, My Company</string>
         <key>NSAppTransportSecurity</key>

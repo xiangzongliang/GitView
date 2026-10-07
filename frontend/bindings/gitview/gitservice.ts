@@ -208,26 +208,19 @@ export function RemoveRemote(repoPath: string, name: string): $CancellablePromis
 }
 
 /**
- * RenameRemote renames a remote (git remote rename). Renaming also renames
- * the remote-tracking branches (refs/remotes/old/* -> refs/remotes/new/*) and
- * updates branch upstream configs automatically.
- */
-export function RenameRemote(repoPath: string, oldName: string, newName: string): $CancellablePromise<void> {
-    return $Call.ByID(424528649, repoPath, oldName, newName);
-}
-
-/**
- * SetRemoteUrl updates the fetch URL of a remote (git remote set-url).
- */
-export function SetRemoteUrl(repoPath: string, name: string, url: string): $CancellablePromise<void> {
-    return $Call.ByID(240677290, repoPath, name, url);
-}
-
-/**
  * RenameBranch renames a local branch.
  */
 export function RenameBranch(repoPath: string, oldName: string, newName: string): $CancellablePromise<void> {
     return $Call.ByID(1363441787, repoPath, oldName, newName);
+}
+
+/**
+ * RenameRemote renames a remote (git remote rename). Renaming also renames
+ * the remote-tracking branches (refs/remotes/old/* → refs/remotes/new/*) and
+ * updates branch upstream configs automatically.
+ */
+export function RenameRemote(repoPath: string, oldName: string, newName: string): $CancellablePromise<void> {
+    return $Call.ByID(424528649, repoPath, oldName, newName);
 }
 
 /**
@@ -280,6 +273,13 @@ export function RunGitStep(repoPath: string, args: string[] | null, network: boo
  */
 export function SetGlobalConfig(key: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(448040806, key, value);
+}
+
+/**
+ * SetRemoteUrl updates the fetch URL of a remote (git remote set-url).
+ */
+export function SetRemoteUrl(repoPath: string, name: string, url: string): $CancellablePromise<void> {
+    return $Call.ByID(240677290, repoPath, name, url);
 }
 
 /**
@@ -345,6 +345,13 @@ export function StashDiff(repoPath: string, index: number, file: string): $Cance
 }
 
 /**
+ * StashDrop removes a stash entry.
+ */
+export function StashDrop(repoPath: string, index: number): $CancellablePromise<void> {
+    return $Call.ByID(1123069703, repoPath, index);
+}
+
+/**
  * StashFiles lists the files contained in a stash entry with their status.
  * Tracked changes are the diff between the stash commit and its first parent
  * (HEAD at stash time); files stashed with -u live in the stash's third
@@ -352,13 +359,6 @@ export function StashDiff(repoPath: string, index: number, file: string): $Cance
  */
 export function StashFiles(repoPath: string, index: number): $CancellablePromise<$models.CommitFile[] | null> {
     return $Call.ByID(1617227781, repoPath, index);
-}
-
-/**
- * StashDrop removes a stash entry.
- */
-export function StashDrop(repoPath: string, index: number): $CancellablePromise<void> {
-    return $Call.ByID(1123069703, repoPath, index);
 }
 
 /**
