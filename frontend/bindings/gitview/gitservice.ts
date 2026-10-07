@@ -448,9 +448,11 @@ export function WatchStatus(): $CancellablePromise<$models.WatchStatus | null> {
 /**
  * WorktreeDiff returns the diff of a file: staged (index vs HEAD) or unstaged
  * (worktree vs index). Untracked files get a synthesized "new file" diff.
+ * When fullFile is true, all context lines are included (effectively showing the
+ * entire current file with the changes highlighted), mirroring StashDiff.
  */
-export function WorktreeDiff(repoPath: string, file: string, staged: boolean): $CancellablePromise<string> {
-    return $Call.ByID(108931279, repoPath, file, staged);
+export function WorktreeDiff(repoPath: string, file: string, staged: boolean, fullFile: boolean): $CancellablePromise<string> {
+    return $Call.ByID(108931279, repoPath, file, staged, fullFile);
 }
 
 /**

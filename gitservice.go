@@ -719,10 +719,15 @@ func (s *GitService) Commit(repoPath string, opts CommitOptions) (string, error)
 
 // WorktreeDiff returns the diff of a file: staged (index vs HEAD) or unstaged
 // (worktree vs index). Untracked files get a synthesized "new file" diff.
-func (s *GitService) WorktreeDiff(repoPath string, file string, staged bool) (string, error) {
+// When fullFile is true, all context lines are included (effectively showing the
+// entire current file with the changes highlighted), mirroring StashDiff.
+func (s *GitService) WorktreeDiff(repoPath string, file string, staged bool, fullFile bool) (string, error) {
 	args := []string{"-c", "core.quotepath=false", "diff", "--no-color", "--no-ext-diff", "-M"}
 	if staged {
 		args = append(args, "--staged")
+	}
+	if fullFile {
+		args = append(args, "-U1000000")
 	}
 	args = append(args, "--", file)
 	// runGitRO：git diff 也会顺带刷新 index，关掉可选写入

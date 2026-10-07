@@ -63,7 +63,12 @@ export async function collectCommitContext(
 	for (const f of picks) {
 		let diff = "";
 		try {
-			diff = await GitService.WorktreeDiff(repoPath, f.path, f.staged);
+			diff = await GitService.WorktreeDiff(
+				repoPath,
+				f.path,
+				f.staged,
+				false,
+			);
 		} catch (e) {
 			// 单个文件读差异失败不应中断整体流程，跳过并在结果中体现截断。
 			console.warn("读取文件差异失败", f.path, errMsg(e));

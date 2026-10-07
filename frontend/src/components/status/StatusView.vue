@@ -24,7 +24,7 @@ import FileList from "./FileList.vue";
 import DiffViewer from "../common/DiffViewer.vue";
 import ImageDiffViewer from "../common/ImageDiffViewer.vue";
 import ConflictResolver from "./ConflictResolver.vue";
-import { isImageFile } from "../../utils/format";
+import { basename, dirname, isImageFile } from "../../utils/format";
 import Icon from "../ui/Icon.vue";
 import Spinner from "../ui/Spinner.vue";
 import Checkbox from "../ui/Checkbox.vue";
@@ -93,6 +93,22 @@ const imageSelected = computed(() => {
 const selectedStatusChar = computed(() => {
 	const f = repo.selectedFile;
 	return f ? statusCharOf(f.path, f.group) : "M";
+});
+
+// 文本差异视图上方展示文件名 + 「完整文件」开关；图片/冲突文件自带视图与标题，无需重复
+const showTextHeader = computed(
+	() =>
+		!!repo.selectedFile &&
+		!conflictedSelected.value &&
+		!imageSelected.value,
+);
+// 「完整文件」读写：切换时用当前选中文件重新加载（staged 文件的完整版即为 index 内容）
+const showFullFile = computed({
+	get: () => repo.fileFullFile,
+	set: (v: boolean) => {
+		if (repo.selectedFile) void repo.selectStatusFile(repo.selectedFile, v);
+		else repo.fileFullFile = v;
+	},
 });
 
 // 已提交但尚未推送的提交数（顶部 Push 按钮的角标同样取此值）
@@ -432,26 +448,54 @@ watch(
 			title="拖动调整左侧宽度"
 			@mousedown="startLeftDrag"
 		/>
-		<ConflictResolver
-			v-if="conflictedSelected"
-			:path="repo.selectedFile!.path"
-		/>
-		<ImageDiffViewer
-			v-else-if="imageSelected"
-			:repo-path="repo.path"
-			:path="repo.selectedFile!.path"
-			:staged="repo.selectedFile!.staged"
-			:status="selectedStatusChar"
-			:raw="repo.fileDiff"
-			:loading="repo.fileDiffLoading"
-		/>
-		<DiffViewer
-			v-else
-			:raw="repo.fileDiff"
-			:loading="repo.fileDiffLoading"
-			:filename="repo.selectedFile?.path"
-			empty-text="选择左侧文件查看差异"
-		/>
+		<div class="diff-pane">
+			<div v-if="showTextHeader" class="diff-head">
+				<Icon name="file" :size="12" />
+				<span class="diff-name mono" :title="repo.selectedFile!.path">{{
+					basename(repo.selectedFile!.path)
+				}}</span>
+				<span
+					v-if="dirname(repo.selectedFile!.path)"
+					class="diff-dir"
+					>{{ dirname(repo.selectedFile!.path) }}</span
+				>
+				<div class="spacer" />
+				<label
+					class="full-file-toggle"
+					title="显示完整文件内容（包含未修改的上下文行）"
+				>
+					<input
+						v-model="showFullFile"
+						type="checkbox"
+						class="toggle-input"
+					/>
+					<span class="toggle-track"
+						><span class="toggle-thumb"
+					/></span>
+					<span class="toggle-label">完整文件</span>
+				</label>
+			</div>
+			<ConflictResolver
+				v-if="conflictedSelected"
+				:path="repo.selectedFile!.path"
+			/>
+			<ImageDiffViewer
+				v-else-if="imageSelected"
+				:repo-path="repo.path"
+				:path="repo.selectedFile!.path"
+				:staged="repo.selectedFile!.staged"
+				:status="selectedStatusChar"
+				:raw="repo.fileDiff"
+				:loading="repo.fileDiffLoading"
+			/>
+			<DiffViewer
+				v-else
+				:raw="repo.fileDiff"
+				:loading="repo.fileDiffLoading"
+				:filename="repo.selectedFile?.path"
+				empty-text="选择左侧文件查看差异"
+			/>
+		</div>
 	</div>
 </template>
 
@@ -618,5 +662,84 @@ watch(
 	line-height: 13px;
 	text-align: center;
 	pointer-events: none;
+}
+
+/* 右侧差异区：文本差异顶部展示文件名 + 「完整文件」开关 */
+.diff-pane {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+.diff-head {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	background: var(--bg-panel);
+	border-bottom: 1px solid var(--border);
+	font-size: 12px;
+	color: var(--text-strong);
+}
+.diff-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.diff-dir {
+	color: var(--text-faint);
+	font-size: 10.5px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	direction: rtl;
+}
+/* ---- 完整文件开关（样式同 StashDetailDialog / ImageDiffViewer） ---- */
+.full-file-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	cursor: pointer;
+	user-select: none;
+	flex: none;
+}
+.toggle-input {
+	position: absolute;
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+.toggle-track {
+	position: relative;
+	width: 28px;
+	height: 15px;
+	border-radius: 999px;
+	background: var(--border-strong);
+	transition: background 0.2s;
+}
+.toggle-input:checked + .toggle-track {
+	background: var(--accent);
+}
+.toggle-thumb {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	background: var(--bg-panel);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+	transition: transform 0.2s;
+}
+.toggle-input:checked + .toggle-track .toggle-thumb {
+	transform: translateX(13px);
+}
+.toggle-label {
+	font-size: 10.5px;
+	color: var(--text-dim);
+	white-space: nowrap;
 }
 </style>

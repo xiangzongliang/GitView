@@ -56,6 +56,8 @@ export const useRepo = defineStore("repo", {
 		selectedFile: null as SelectedFile | null,
 		fileDiff: "",
 		fileDiffLoading: false,
+		/** 是否以「完整文件」方式查看当前文件（含未修改的上下文行） */
+		fileFullFile: false,
 		commitMessage: "",
 		amend: false,
 		/** 正在执行文件级操作（暂存/取消/丢弃）的路径：对应行显示局部 loading */
@@ -279,9 +281,10 @@ export const useRepo = defineStore("repo", {
 			}
 		},
 
-		async selectStatusFile(f: SelectedFile | null) {
+		async selectStatusFile(f: SelectedFile | null, fullFile?: boolean) {
 			this.selectedFile = f;
 			this.fileDiff = "";
+			if (fullFile !== undefined) this.fileFullFile = fullFile;
 			if (!f) return;
 			this.fileDiffLoading = true;
 			try {
@@ -289,6 +292,7 @@ export const useRepo = defineStore("repo", {
 					this.path,
 					f.path,
 					f.staged,
+					this.fileFullFile,
 				);
 			} catch (e) {
 				useUI().error("加载 diff 失败", errMsg(e));
