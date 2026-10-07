@@ -630,6 +630,20 @@ export const useRepo = defineStore("repo", {
 				{ key: "remote" },
 			);
 		},
+		renameRemote(oldName: string, newName: string) {
+			return this.runOp(
+				"重命名远程 " + oldName + " → " + newName,
+				() => GitService.RenameRemote(this.path, oldName, newName),
+				{ key: "remote" },
+			);
+		},
+		setRemoteUrl(name: string, url: string) {
+			return this.runOp(
+				"修改远程地址 " + name,
+				() => GitService.SetRemoteUrl(this.path, name, url),
+				{ key: "remote" },
+			);
+		},
 
 		stashSave(opts: StashOptions) {
 			return this.runOp(
@@ -649,6 +663,30 @@ export const useRepo = defineStore("repo", {
 			return this.runOp(
 				"Stash apply",
 				() => GitService.StashApply(this.path, index),
+				{ key: "stash" },
+			);
+		},
+		stashApplyIndex(index: number) {
+			return this.runOp(
+				"Stash apply（恢复暂存区）",
+				() => GitService.StashApplyIndex(this.path, index),
+				{ key: "stash" },
+			);
+		},
+		stashBranch(index: number, name: string) {
+			return this.runOp(
+				"从 Stash 新建分支 " + name,
+				() => GitService.StashBranch(this.path, index, name),
+				{ key: "stash" },
+			);
+		},
+		stashClear() {
+			return this.runOp(
+				"清空所有 Stash",
+				async () => {
+					await GitService.StashClear(this.path);
+					await this.refreshStashes();
+				},
 				{ key: "stash" },
 			);
 		},

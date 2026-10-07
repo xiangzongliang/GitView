@@ -9,9 +9,11 @@ import MergeIntoDialog from "./MergeIntoDialog.vue";
 import PushDialog from "./PushDialog.vue";
 import PullDialog from "./PullDialog.vue";
 import StashDialog from "./StashDialog.vue";
+import StashDetailDialog from "./StashDetailDialog.vue";
 import ResetDialog from "./ResetDialog.vue";
 import TagDialog from "./TagDialog.vue";
 import RemoteDialog from "./RemoteDialog.vue";
+import RemoteEditDialog from "./RemoteEditDialog.vue";
 import AiCommitDialog from "../ai/AiCommitDialog.vue";
 
 const ui = useUI();
@@ -60,6 +62,11 @@ const ui = useUI();
 			v-else-if="ui.dialog.kind === 'stash'"
 			@close="ui.closeDialog()"
 		/>
+		<StashDetailDialog
+			v-else-if="ui.dialog.kind === 'stash-detail'"
+			:payload="ui.dialog.payload"
+			@close="ui.closeDialog()"
+		/>
 		<ResetDialog
 			v-else-if="ui.dialog.kind === 'reset'"
 			:payload="ui.dialog.payload"
@@ -72,6 +79,11 @@ const ui = useUI();
 		/>
 		<RemoteDialog
 			v-else-if="ui.dialog.kind === 'remote'"
+			:payload="ui.dialog.payload"
+			@close="ui.closeDialog()"
+		/>
+		<RemoteEditDialog
+			v-else-if="ui.dialog.kind === 'remote-edit'"
 			:payload="ui.dialog.payload"
 			@close="ui.closeDialog()"
 		/>

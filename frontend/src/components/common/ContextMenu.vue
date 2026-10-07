@@ -77,7 +77,12 @@ function click(action?: () => void) {
 						:size="13"
 						class="ctx-icon"
 					/>
-					<span class="ctx-label">{{ item.label }}</span>
+					<span class="ctx-label">
+						<span class="ctx-text">{{ item.label }}</span>
+						<span v-if="item.desc" class="ctx-desc">{{
+							item.desc
+						}}</span>
+					</span>
 					<Icon
 						v-if="item.checked"
 						name="check"
@@ -143,6 +148,27 @@ function click(action?: () => void) {
 	white-space: normal;
 	word-break: break-word;
 	line-height: 1.45;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.ctx-text {
+	white-space: normal;
+	word-break: break-word;
+}
+.ctx-desc {
+	font-size: 10.5px;
+	font-family: var(--font-mono, monospace);
+	color: var(--text-faint);
+	white-space: normal;
+	word-break: break-word;
+	opacity: 0.9;
+}
+.ctx-item:hover:not(:disabled) .ctx-desc {
+	color: rgba(255, 255, 255, 0.78);
+}
+.ctx-item.danger:hover:not(:disabled) .ctx-desc {
+	color: rgba(255, 255, 255, 0.78);
 }
 .ctx-check {
 	flex: none;

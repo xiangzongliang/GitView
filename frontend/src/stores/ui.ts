@@ -9,6 +9,8 @@ export interface Toast {
 
 export interface MenuItem {
 	label?: string;
+	/** 标签下方的小字描述（如对应的 git 命令） */
+	desc?: string;
 	icon?: string;
 	danger?: boolean;
 	disabled?: boolean;

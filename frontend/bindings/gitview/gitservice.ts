@@ -208,6 +208,22 @@ export function RemoveRemote(repoPath: string, name: string): $CancellablePromis
 }
 
 /**
+ * RenameRemote renames a remote (git remote rename). Renaming also renames
+ * the remote-tracking branches (refs/remotes/old/* -> refs/remotes/new/*) and
+ * updates branch upstream configs automatically.
+ */
+export function RenameRemote(repoPath: string, oldName: string, newName: string): $CancellablePromise<void> {
+    return $Call.ByID(424528649, repoPath, oldName, newName);
+}
+
+/**
+ * SetRemoteUrl updates the fetch URL of a remote (git remote set-url).
+ */
+export function SetRemoteUrl(repoPath: string, name: string, url: string): $CancellablePromise<void> {
+    return $Call.ByID(240677290, repoPath, name, url);
+}
+
+/**
  * RenameBranch renames a local branch.
  */
 export function RenameBranch(repoPath: string, oldName: string, newName: string): $CancellablePromise<void> {
@@ -292,6 +308,50 @@ export function StageAll(repoPath: string): $CancellablePromise<void> {
  */
 export function StashApply(repoPath: string, index: number): $CancellablePromise<void> {
     return $Call.ByID(3648520378, repoPath, index);
+}
+
+/**
+ * StashApplyIndex applies a stash entry and also restores the staged state
+ * (git stash apply --index).
+ */
+export function StashApplyIndex(repoPath: string, index: number): $CancellablePromise<void> {
+    return $Call.ByID(2053423502, repoPath, index);
+}
+
+/**
+ * StashBranch creates a new branch from the commit the stash was based on and
+ * applies the stash there (git stash branch <name> <stash>). Useful when the
+ * current branch has moved and applying would conflict. Note: it checks out
+ * the new branch.
+ */
+export function StashBranch(repoPath: string, index: number, name: string): $CancellablePromise<void> {
+    return $Call.ByID(1423906202, repoPath, index, name);
+}
+
+/**
+ * StashClear removes all stash entries.
+ */
+export function StashClear(repoPath: string): $CancellablePromise<void> {
+    return $Call.ByID(2769051131, repoPath);
+}
+
+/**
+ * StashDiff returns the diff of one file inside a stash entry. Untracked
+ * files (stashed with -u) have no tracked diff; their content is read from
+ * the stash's third parent and synthesized into a new-file patch.
+ */
+export function StashDiff(repoPath: string, index: number, file: string): $CancellablePromise<string> {
+    return $Call.ByID(573870921, repoPath, index, file);
+}
+
+/**
+ * StashFiles lists the files contained in a stash entry with their status.
+ * Tracked changes are the diff between the stash commit and its first parent
+ * (HEAD at stash time); files stashed with -u live in the stash's third
+ * parent and are reported as untracked additions.
+ */
+export function StashFiles(repoPath: string, index: number): $CancellablePromise<$models.CommitFile[] | null> {
+    return $Call.ByID(1617227781, repoPath, index);
 }
 
 /**

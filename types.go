@@ -143,6 +143,9 @@ type CommitFile struct {
 	Additions int    `json:"additions"`
 	Deletions int    `json:"deletions"`
 	Binary    bool   `json:"binary"`
+	// Untracked marks files stored in a stash's third parent (stash -u);
+	// always false for commit file lists.
+	Untracked bool `json:"untracked,omitempty"`
 }
 
 // CommitOptions configures a commit.

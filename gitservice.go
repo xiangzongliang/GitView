@@ -323,7 +323,13 @@ func (s *GitService) CommitFiles(repoPath string, hash string) ([]CommitFile, er
 	if err != nil {
 		return nil, err
 	}
+	return s.diffFileList(repoPath, base)
+}
 
+// diffFileList runs a name-status + numstat diff for the given base args and
+// parses the result into CommitFile entries. Shared by CommitFiles and
+// StashFiles.
+func (s *GitService) diffFileList(repoPath string, base []string) ([]CommitFile, error) {
 	// Name + status (handles renames as "R100\0old\0new").
 	nsArgs := append(append([]string{"-c", "core.quotepath=false"}, base...), "-z", "-M", "--name-status")
 	nsOut, err := runGit(repoPath, nsArgs...)
@@ -958,6 +964,36 @@ func (s *GitService) RemoveRemote(repoPath string, name string) error {
 	return err
 }
 
+// RenameRemote renames a remote (git remote rename). Renaming also renames
+// the remote-tracking branches (refs/remotes/old/* → refs/remotes/new/*) and
+// updates branch upstream configs automatically.
+func (s *GitService) RenameRemote(repoPath string, oldName string, newName string) error {
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+	if oldName == "" || newName == "" {
+		return errors.New("远程名不能为空")
+	}
+	if oldName == newName {
+		return nil
+	}
+	_, err := runGit(repoPath, "remote", "rename", oldName, newName)
+	return err
+}
+
+// SetRemoteUrl updates the fetch URL of a remote (git remote set-url).
+func (s *GitService) SetRemoteUrl(repoPath string, name string, url string) error {
+	name = strings.TrimSpace(name)
+	url = strings.TrimSpace(url)
+	if name == "" {
+		return errors.New("远程名不能为空")
+	}
+	if url == "" {
+		return errors.New("远程地址不能为空")
+	}
+	_, err := runGit(repoPath, "remote", "set-url", name, url)
+	return err
+}
+
 // Fetch fetches one remote (or all when remote == "").
 func (s *GitService) Fetch(repoPath string, remote string, prune bool) (string, error) {
 	args := []string{"fetch"}
@@ -1100,6 +1136,118 @@ func (s *GitService) StashApply(repoPath string, index int) error {
 func (s *GitService) StashDrop(repoPath string, index int) error {
 	_, err := runGit(repoPath, "stash", "drop", fmt.Sprintf("stash@{%d}", index))
 	return err
+}
+
+// StashClear removes all stash entries.
+func (s *GitService) StashClear(repoPath string) error {
+	_, err := runGit(repoPath, "stash", "clear")
+	return err
+}
+
+// StashApplyIndex applies a stash entry and also restores the staged state
+// (git stash apply --index).
+func (s *GitService) StashApplyIndex(repoPath string, index int) error {
+	_, err := runGit(repoPath, "stash", "apply", "--index", fmt.Sprintf("stash@{%d}", index))
+	return err
+}
+
+// StashBranch creates a new branch from the commit the stash was based on and
+// applies the stash there (git stash branch <name> <stash>). Useful when the
+// current branch has moved and applying would conflict. Note: it checks out
+// the new branch.
+func (s *GitService) StashBranch(repoPath string, index int, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("分支名不能为空")
+	}
+	_, err := runGit(repoPath, "stash", "branch", name, fmt.Sprintf("stash@{%d}", index))
+	return err
+}
+
+// StashFiles lists the files contained in a stash entry with their status.
+// Tracked changes are the diff between the stash commit and its first parent
+// (HEAD at stash time); files stashed with -u live in the stash's third
+// parent and are reported as untracked additions.
+func (s *GitService) StashFiles(repoPath string, index int) ([]CommitFile, error) {
+	ref := fmt.Sprintf("stash@{%d}", index)
+	if _, err := runGit(repoPath, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err != nil {
+		return nil, fmt.Errorf("stash@{%d} 不存在（可能已被弹出或删除）", index)
+	}
+	files, err := s.diffFileList(repoPath, []string{"diff", "-M", ref + "^1", ref})
+	if err != nil {
+		return nil, err
+	}
+	// stash -u 时未跟踪文件保存在第三个父提交中；ls-tree 失败即没有该父提交
+	if lsOut, err := runGitRO(repoPath, "-c", "core.quotepath=false", "ls-tree", "-r", "--name-only", "-z", ref+"^3"); err == nil {
+		seen := make(map[string]bool, len(files))
+		for _, f := range files {
+			seen[f.Path] = true
+		}
+		for _, p := range strings.Split(lsOut, "\x00") {
+			if p == "" || seen[p] {
+				continue
+			}
+			files = append(files, CommitFile{Path: p, Status: "A", Untracked: true})
+		}
+	}
+	return files, nil
+}
+
+// StashDiff returns the diff of one file inside a stash entry. Untracked
+// files (stashed with -u) have no tracked diff; their content is read from
+// the stash's third parent and synthesized into a new-file patch.
+func (s *GitService) StashDiff(repoPath string, index int, file string) (string, error) {
+	ref := fmt.Sprintf("stash@{%d}", index)
+	out, err := runGitRO(repoPath, "-c", "core.quotepath=false", "diff", "--no-color", "--no-ext-diff", "-M", ref+"^1", ref, "--", file)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(out) != "" {
+		return out, nil
+	}
+	if d, ok := s.synthesizeStashUntrackedDiff(repoPath, ref, file); ok {
+		return d, nil
+	}
+	return out, nil
+}
+
+// synthesizeStashUntrackedDiff builds a new-file patch for an untracked file
+// stored in the stash's third parent (stash -u).
+func (s *GitService) synthesizeStashUntrackedDiff(repoPath, ref, file string) (string, bool) {
+	out, err := runGitRO(repoPath, "-c", "core.quotepath=false", "cat-file", "blob", ref+"^3:"+file)
+	if err != nil {
+		return "", false
+	}
+	mode := "100644"
+	if t, err := runGitRO(repoPath, "-c", "core.quotepath=false", "ls-tree", ref+"^3", "--", file); err == nil && t != "" {
+		if f := strings.Fields(strings.SplitN(t, "\x00", 2)[0]); len(f) >= 3 {
+			mode = f[0]
+		}
+	}
+	if len(out) > untrackedDiffLimit {
+		return "", false
+	}
+	if isBinaryData([]byte(out)) {
+		return fmt.Sprintf("diff --git a/%s b/%s\nnew file mode %s\nBinary file (%d bytes) not shown.\n",
+			file, file, mode, len(out)), true
+	}
+	lines := strings.Split(out, "\n")
+	noFinalNewline := len(lines) > 0 && lines[len(lines)-1] == ""
+	if noFinalNewline {
+		lines = lines[:len(lines)-1]
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "diff --git a/%s b/%s\nnew file mode %s\n--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n",
+		file, file, mode, file, len(lines))
+	for _, l := range lines {
+		b.WriteString("+")
+		b.WriteString(l)
+		b.WriteString("\n")
+	}
+	if !noFinalNewline && out != "" {
+		b.WriteString("\\ No newline at end of file\n")
+	}
+	return b.String(), true
 }
 
 // ---------------------------------------------------------------------------

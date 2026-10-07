@@ -223,6 +223,7 @@ function remoteBranchMenu(e: MouseEvent, b: BranchInfo) {
 }
 
 function remoteMenu(e: MouseEvent, name: string) {
+	const cur = remotes.value.find((x) => x.name === name);
 	menu(e, [
 		{
 			label: "Fetch " + name,
@@ -233,13 +234,22 @@ function remoteMenu(e: MouseEvent, name: string) {
 			label: "复制 URL",
 			icon: "copy",
 			action: () => {
-				const r = remotes.value.find((x) => x.name === name);
-				if (r?.url) copyText(r.url);
+				if (cur?.url) copyText(cur.url);
+			},
+		},
+		{ separator: true },
+		{
+			label: "编辑远程…",
+			desc: "git remote rename / git remote set-url",
+			icon: "edit",
+			action: () => {
+				ui.openDialog("remote-edit", { name, url: cur?.url || "" });
 			},
 		},
 		{ separator: true },
 		{
 			label: "删除远程",
+			desc: "git remote remove " + name,
 			icon: "trash",
 			danger: true,
 			// 至少保留一个远程：只剩最后一个时禁用删除。
@@ -304,21 +314,60 @@ function tagMenu(e: MouseEvent, t: TagInfo) {
 }
 
 // ---------------------------------------------------------------------- stashes
+function openStash(s: StashEntry) {
+	ui.openDialog("stash-detail", {
+		index: s.index,
+		ref: s.ref,
+		branch: s.branch,
+		message: s.message,
+		timestamp: s.timestamp,
+	});
+}
+
 function stashMenu(e: MouseEvent, s: StashEntry) {
 	menu(e, [
 		{
+			label: "查看详情（文件与差异）",
+			icon: "eye",
+			action: () => openStash(s),
+		},
+		{ separator: true },
+		{
 			label: "应用（保留 Stash）",
+			desc: "git stash apply " + s.ref,
 			icon: "stash",
 			action: () => repo.stashApply(s.index),
 		},
 		{
+			label: "应用（含暂存区 --index）",
+			desc: "git stash apply --index " + s.ref,
+			icon: "check",
+			action: () => repo.stashApplyIndex(s.index),
+		},
+		{
 			label: "弹出（应用并删除）",
+			desc: "git stash pop " + s.ref,
 			icon: "pull",
 			action: () => repo.stashPop(s.index),
+		},
+		{
+			label: "从该 Stash 新建分支…",
+			icon: "branch",
+			action: async () => {
+				const name = await prompt({
+					title: "从 Stash 新建分支",
+					label: "新分支名（会切换到该分支并应用此 Stash）",
+					value: "stash-fix-" + (s.branch || "branch"),
+					placeholder: "例如 stash-fix-login",
+				});
+				if (name && name.trim())
+					await repo.stashBranch(s.index, name.trim());
+			},
 		},
 		{ separator: true },
 		{
 			label: "删除 Stash…",
+			desc: "git stash drop " + s.ref,
 			icon: "trash",
 			danger: true,
 			action: async () => {
@@ -337,6 +386,16 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 			},
 		},
 	]);
+}
+
+async function stashClearAll() {
+	const ok = await ui.confirm({
+		title: "清空所有 Stash",
+		message: `确定清空全部 ${stashes.value.length} 个 Stash 吗？\n此操作不可恢复。`,
+		confirmLabel: "全部删除",
+		danger: true,
+	});
+	if (ok) await repo.stashClear();
 }
 </script>
 
@@ -543,6 +602,14 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 					<span class="sec-count">{{ stashes.length }}</span>
 				</button>
 				<button
+					v-if="stashes.length > 0"
+					class="btn-icon sec-add"
+					title="清空所有 Stash…"
+					@click="stashClearAll"
+				>
+					<Icon name="trash" :size="12" />
+				</button>
+				<button
 					class="btn-icon sec-add"
 					title="Stash 当前更改…"
 					@click="ui.openDialog('stash')"
@@ -558,6 +625,7 @@ function stashMenu(e: MouseEvent, s: StashEntry) {
 					:title="
 						s.message + (s.branch ? '（' + s.branch + '）' : '')
 					"
+					@click="openStash(s)"
 					@contextmenu="stashMenu($event, s)"
 				>
 					<Icon name="stash" :size="11" class="faint" />

@@ -173,6 +173,12 @@ export interface CommitFile {
     "additions": number;
     "deletions": number;
     "binary": boolean;
+
+    /**
+     * Untracked marks files stored in a stash's third parent (stash -u);
+     * always false for commit file lists.
+     */
+    "untracked"?: boolean;
 }
 
 /**
