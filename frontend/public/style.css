@@ -22,9 +22,11 @@
 
 	--accent: #4c8dff;
 	--accent-hover: #6ba1ff;
-	/* 主题色半透明变体：静态回退值（settings store 会按用户所选主题色覆盖） */
+	/* 主题色半透明变体 + 填充上的前景：静态回退值（settings store 按当前主题色/亮暗外观写入） */
 	--accent-soft: rgba(76, 141, 255, 0.2);
-	--accent-wash: rgba(76, 141, 255, 0.08);
+	--accent-wash: rgba(76, 141, 255, 0.09);
+	/* 主色填充（按钮/角标/勾选框）上的前景色：浅色主色会自动改用深墨色 */
+	--accent-fg: #ffffff;
 
 	--green: #46c26a;
 	--yellow: #e3b341;
@@ -341,11 +343,11 @@ textarea {
 .btn-primary {
 	background: var(--accent);
 	border-color: var(--accent);
-	color: #fff;
+	color: var(--accent-fg);
 }
 .btn-primary:hover:not(:disabled) {
 	background: var(--accent-hover);
-	color: #fff;
+	color: var(--accent-fg);
 }
 
 .btn-danger {

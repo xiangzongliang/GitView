@@ -1,6 +1,10 @@
 <script setup lang="ts">
 // 设置 · 外观：主题色（应用主色调）+ 亮色/暗色/跟随系统（应用颜色）。
-import { useSettings, ACCENT_PRESETS } from "../../stores/settings";
+import {
+	useSettings,
+	ACCENT_PRESETS,
+	foregroundOn,
+} from "../../stores/settings";
 import Icon from "../ui/Icon.vue";
 
 const settings = useSettings();
@@ -17,11 +21,18 @@ const settings = useSettings();
 					:key="a.key"
 					class="swatch"
 					:class="{ active: settings.accent === a.key }"
-					:style="{ '--swatch': a.color }"
+					:style="{
+						'--swatch': a.color,
+						color: foregroundOn(a.color),
+					}"
 					:title="a.label"
 					@click="settings.setAccent(a.key)"
 				>
-					<Icon v-if="settings.accent === a.key" name="check" :size="11" />
+					<Icon
+						v-if="settings.accent === a.key"
+						name="check"
+						:size="11"
+					/>
 				</button>
 			</div>
 		</section>
@@ -74,6 +85,7 @@ const settings = useSettings();
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	/* 勾选图标颜色由 foregroundOn() 按色板明度内联覆盖 */
 	color: #fff;
 	transition:
 		transform 0.12s ease,
@@ -111,10 +123,10 @@ const settings = useSettings();
 }
 .mode-btn.active {
 	background: var(--accent);
-	color: #fff;
+	color: var(--accent-fg);
 	font-weight: 600;
 }
 .mode-btn.active:hover {
-	color: #fff;
+	color: var(--accent-fg);
 }
 </style>

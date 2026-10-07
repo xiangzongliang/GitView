@@ -278,7 +278,7 @@ const refFilterIcon = computed(() => {
 	padding: 0 4px;
 	border-radius: 8px;
 	background: var(--accent);
-	color: #fff;
+	color: var(--accent-fg);
 	font-size: 10px;
 	line-height: 15px;
 	text-align: center;
@@ -310,7 +310,7 @@ const refFilterIcon = computed(() => {
 	border: 1.5px solid var(--bg-panel);
 	border-radius: 8px;
 	background: var(--accent);
-	color: #fff;
+	color: var(--accent-fg);
 	font-size: 9.5px;
 	font-weight: 700;
 	line-height: 12px;

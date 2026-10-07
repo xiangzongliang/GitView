@@ -28,7 +28,9 @@ const emit = defineEmits<{
 }>();
 
 const controlled = computed(() => props.checked !== undefined);
-const value = computed(() => (controlled.value ? !!props.checked : !!props.modelValue));
+const value = computed(() =>
+	controlled.value ? !!props.checked : !!props.modelValue,
+);
 
 function onClick() {
 	if (props.disabled) return;
@@ -94,14 +96,14 @@ function onClick() {
 		border-color 0.13s ease,
 		box-shadow 0.13s ease;
 }
-/* 勾：用两侧边框旋转出的对勾 */
+/* 勾：用两侧边框旋转出的对勾（颜色随主色前景：浅色主色下自动转深） */
 .cb-input::after {
 	content: "";
 	width: 4px;
 	height: 7.5px;
 	margin-top: -2px;
-	border-right: 2px solid #fff;
-	border-bottom: 2px solid #fff;
+	border-right: 2px solid var(--accent-fg);
+	border-bottom: 2px solid var(--accent-fg);
 	transform: rotate(42deg) scale(0);
 	transition: transform 0.13s cubic-bezier(0.3, 1.4, 0.5, 1);
 }
@@ -123,7 +125,7 @@ function onClick() {
 	margin-top: 0;
 	border: none;
 	border-radius: 1px;
-	background: #fff;
+	background: var(--accent-fg);
 	transform: none;
 }
 .cb-input:focus-visible {

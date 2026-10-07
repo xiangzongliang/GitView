@@ -612,7 +612,7 @@ watch(
 	border: 1.5px solid var(--bg-panel);
 	border-radius: 8px;
 	background: var(--accent);
-	color: #fff;
+	color: var(--accent-fg);
 	font-size: 9.5px;
 	font-weight: 700;
 	line-height: 13px;
