@@ -108,6 +108,13 @@ watch(
 	},
 );
 
+// 新增/删除的文件没有「修改前 vs 修改后」可比：源码视图直接单侧呈现
+// （新增只显示新增的源码、删除只显示删除的源码，用颜色区分）。
+// 新增/删除的差异本身就只有一侧，因此不再有任何对比效果。
+const plainSide = computed<"" | "add" | "del">(() =>
+	isAdded.value ? "add" : isDeleted.value ? "del" : "",
+);
+
 // 缩放：适应窗口 / 实际大小（超出容器时滚动查看）
 const fit = ref(true);
 
@@ -150,6 +157,7 @@ const showImages = computed(() => !isSvg.value || !showCode.value);
 			:raw="raw"
 			:loading="loading"
 			:filename="path"
+			:plain-side="plainSide"
 			empty-text="没有差异"
 		/>
 		<div v-else class="panes" :class="{ actual: !fit }">

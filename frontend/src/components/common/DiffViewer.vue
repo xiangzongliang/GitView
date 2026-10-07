@@ -11,8 +11,11 @@ const props = withDefaults(
 		loading?: boolean;
 		filename?: string;
 		emptyText?: string;
+		/** 单侧源码模式：新增文件只显示新增行（add）、删除文件只显示删除行（del），
+		 *  并隐藏 hunk 头/增删标记等差异装饰，直接呈现该侧源码 */
+		plainSide?: "" | "add" | "del";
 	}>(),
-	{ loading: false, filename: "", emptyText: "没有差异" },
+	{ loading: false, filename: "", emptyText: "没有差异", plainSide: "" },
 );
 
 const MAX_LINES = 3000;
@@ -72,6 +75,8 @@ const files = computed<RenderFile[]>(() => {
 		for (const h of f.hunks) {
 			const rh: RenderHunk = { header: h.header, lines: [] };
 			for (const l of h.lines) {
+				// 单侧源码模式：只保留该侧的行（新增文件的 + 行 / 删除文件的 − 行）
+				if (props.plainSide && l.kind !== props.plainSide) continue;
 				if (budget <= 0) {
 					rf.truncated = true;
 					break;
@@ -84,7 +89,8 @@ const files = computed<RenderFile[]>(() => {
 					html: highlight(l.text, lang),
 				});
 			}
-			rf.hunks.push(rh);
+			// 单侧模式下只保留有内容的 hunk，避免空壳导致空白渲染
+			if (!props.plainSide || rh.lines.length > 0) rf.hunks.push(rh);
 			if (rf.truncated) break;
 		}
 		out.push(rf);
@@ -93,10 +99,13 @@ const files = computed<RenderFile[]>(() => {
 	return out;
 });
 
-const isEmpty = computed(
-	() =>
-		!props.loading && files.value.length === 0 && !(props.raw || "").trim(),
-);
+const isEmpty = computed(() => {
+	if (props.loading) return false;
+	if (!props.plainSide)
+		return files.value.length === 0 && !(props.raw || "").trim();
+	// 单侧源码模式：没有任何该侧行时视为空
+	return files.value.every((f) => f.hunks.every((h) => h.lines.length === 0));
+});
 </script>
 
 <template>
@@ -122,13 +131,13 @@ const isEmpty = computed(
 				<div v-if="f.binary" class="diff-binary">
 					二进制文件，无法显示差异
 				</div>
-				<div v-else class="diff-table">
+				<div v-else class="diff-table" :class="{ plain: !!plainSide }">
 					<div
 						v-for="(h, hi) in f.hunks"
 						:key="hi"
 						class="diff-hunk-chunk"
 					>
-						<div class="diff-row hunk">
+						<div v-if="!plainSide" class="diff-row hunk">
 							<span class="ln" />
 							<span class="ln" />
 							<span class="code">{{ h.header }}</span>
@@ -139,10 +148,19 @@ const isEmpty = computed(
 							class="diff-row"
 							:class="l.kind"
 						>
-							<span class="ln" :data-no="l.oldNo || ''" />
-							<span class="ln" :data-no="l.newNo || ''" />
+							<span
+								v-if="!plainSide || plainSide === 'del'"
+								class="ln"
+								:data-no="l.oldNo || ''"
+							/>
+							<span
+								v-if="!plainSide || plainSide === 'add'"
+								class="ln"
+								:data-no="l.newNo || ''"
+							/>
 							<span class="code">
 								<span
+									v-if="!plainSide"
 									class="mark"
 									:data-mark="
 										l.kind === 'add'
@@ -219,6 +237,10 @@ const isEmpty = computed(
 	display: grid;
 	grid-template-columns: 46px 46px 1fr;
 	min-height: 18px;
+}
+/* 单侧源码模式：只保留一个行号列（新增显示新行号 / 删除显示旧行号） */
+.diff-table.plain .diff-row {
+	grid-template-columns: 46px 1fr;
 }
 .ln {
 	text-align: right;
