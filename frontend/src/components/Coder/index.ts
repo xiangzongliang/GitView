@@ -26,6 +26,8 @@
  *   filename（按扩展名推断语言）、readonly、indentSize（默认 2）、
  *   fontSize（默认 CODER_DEFAULT_FONT_SIZE）、themeVars（--hl-* 等变量表）、
  *   markedLines（0 起源行号数组，冲突区域等外部标注行高亮）、
+ *   markedLines2（0 起源行号数组，第二组标注行，使用独立的
+ *   --ed-mark-bg-2 / --ed-mark-bar-2 着色）、
  *   preserveScroll（data 重载时保留滚动位置，供同步滚动场景）、
  *   statusControls（默认 true；为 false 时隐藏状态栏的字号/缩进/语言
  *   菜单，仅保留 Ln/Col、选中与只读徽章，供多窗格副窗格使用）、

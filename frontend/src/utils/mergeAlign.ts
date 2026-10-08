@@ -75,14 +75,20 @@ interface Anchor {
 }
 
 export interface MergeAlign {
-	/** 把 src 面板的行号映射到 dst 面板（单调、自动 clamp） */
+	/** 把 src 面板的行号映射到 dst 面板（单调、自动 clamp，返回整数行号） */
 	mapLine(src: PaneId, dst: PaneId, line: number): number;
+	/** 浮点版行号映射：避免 Math.round 导致的跨行抖动，供同步滚动使用 */
+	mapLineFloat(src: PaneId, dst: PaneId, line: number): number;
 	/** B 面板中属于冲突区域（ours 段）的行号（0 起） */
 	marksB: number[];
 	/** C 面板中属于冲突区域（theirs 段）的行号 */
 	marksC: number[];
 	/** D 面板中属于冲突块（含三行标记）的行号 */
 	marksD: number[];
+	/** D 面板中 B 侧代码行号（<<<<<<< 与 ======= 之间的内容行，不含标记行） */
+	marksDOurSide: number[];
+	/** D 面板中 C 侧代码行号（======= 与 >>>>>>> 之间的内容行，不含标记行） */
+	marksDTheirsSide: number[];
 	/** 每个冲突块在 B/C/D 三面板中的定位行（0 起）：
 	 *  b/c = ours/theirs 段首行（在对应分支文件中的实际位置），
 	 *  d = "<<<<<<<" 标记行；与传入的 hunks 一一对应 */
@@ -140,6 +146,8 @@ export function buildMergeAlign(
 	const marksB: number[] = [];
 	const marksC: number[] = [];
 	const marksD: number[] = [];
+	const marksDOurSide: number[] = [];
+	const marksDTheirsSide: number[] = [];
 	const hunkLines: { b: number; c: number; d: number }[] = [];
 
 	// B/C 中的顺序搜索游标
@@ -159,6 +167,9 @@ export function buildMergeAlign(
 		for (let i = 0; i < ours.length; i++) marksB.push(bLine + i);
 		for (let i = 0; i < theirs.length; i++) marksC.push(cLine + i);
 		for (let i = h.start; i <= h.end; i++) marksD.push(i);
+		// D 面板中按分支拆分的代码行（不含 <<<<<<<、=======、>>>>>>> 标记行）
+		for (let i = h.start + 1; i < h.mid; i++) marksDOurSide.push(i);
+		for (let i = h.mid + 1; i < h.end; i++) marksDTheirsSide.push(i);
 
 		const bEnd = bLine + ours.length;
 		const cEnd = cLine + theirs.length;
@@ -203,5 +214,30 @@ export function buildMergeAlign(
 		);
 	}
 
-	return { mapLine, marksB, marksC, marksD, hunkLines };
+	/** 浮点版：与 mapLine 逻辑一致但不取整，供同步滚动避免行边界抖动 */
+	function mapLineFloat(src: PaneId, dst: PaneId, line: number): number {
+		const x = clamp(line, lens[src]);
+		if (src === dst) return x;
+		let i = 0;
+		const n = anchors.length;
+		while (i + 1 < n && anchors[i + 1]![src] <= x) i++;
+		const a1 = anchors[i]!;
+		const a2 = anchors[i + 1];
+		if (!a2) return clamp(a1[dst], lens[dst]);
+		const span = a2[src] - a1[src];
+		if (span <= 0) return clamp(a1[dst], lens[dst]);
+		const ratio = (x - a1[src]) / span;
+		return clamp(a1[dst] + ratio * (a2[dst] - a1[dst]), lens[dst]);
+	}
+
+	return {
+		mapLine,
+		mapLineFloat,
+		marksB,
+		marksC,
+		marksD,
+		marksDOurSide,
+		marksDTheirsSide,
+		hunkLines,
+	};
 }

@@ -67,6 +67,7 @@ import {
 	wordPrefixBefore,
 	type WordIndex,
 } from "./completion";
+import Tooltip from "../ui/Tooltip.vue";
 
 /** 字号与行高均可调（见 fontSizePx / lineHeightPx）：JS 度量与 CSS 变量
  *  --ed-font-size / --ed-line-height 由 rootStyle 动态注入，严格一致 */
@@ -98,6 +99,9 @@ interface Props {
 	placeholder?: string;
 	/** 需高亮标注的源行号（0 起）：如三方合并中的冲突区域 */
 	markedLines?: number[];
+	/** 第二组需高亮标注的源行号（0 起）：使用 --ed-mark-bg-2 / --ed-mark-bar-2 着色，
+	 *  与 markedLines（使用 --ed-mark-bg / --ed-mark-bar）独立，互不覆盖 */
+	markedLines2?: number[];
 	/** data 重载时保留滚动位置（供同步滚动场景，避免程序化更新内容后跳回顶部） */
 	preserveScroll?: boolean;
 	/** 状态栏是否展示字号/缩进/语言菜单（多窗格场景只让主窗格展示，
@@ -123,6 +127,7 @@ const props = withDefaults(defineProps<Props>(), {
 	preserveScroll: false,
 	statusControls: true,
 	lensLines: () => [],
+	markedLines2: () => [],
 });
 
 const emit = defineEmits<{
@@ -229,7 +234,7 @@ const LANGUAGE_OPTIONS: { id: LanguageId; label: string }[] = (() => {
 })();
 
 /** 缩进空格数可选项 */
-const INDENT_OPTIONS = [2, 4, 8];
+const INDENT_OPTIONS = [2, 4];
 
 /** 字号可选项（px）：默认 13 与应用标准字号一致 */
 const FONT_OPTIONS = [9, 10, 11, 12, 13, 14, 16, 18];
@@ -333,7 +338,7 @@ watch(
 
 // ---------- 代码折叠 / 缩进彩虹 ----------
 
-/** 缩进级别彩虹色板（One Dark 风，循环取色） */
+/** 缩进级别彩虹色板（16 色，深层嵌套下避免过快循环） */
 const RAINBOW_COLORS = [
 	"#e06c75",
 	"#d19a66",
@@ -343,19 +348,27 @@ const RAINBOW_COLORS = [
 	"#61afef",
 	"#c678dd",
 	"#be5046",
+	"#e8a090",
+	"#d4b870",
+	"#7ecb8a",
+	"#48b8b0",
+	"#6298d8",
+	"#b888e8",
+	"#d890b8",
+	"#c09870",
 ];
 
 function rainbowColor(level: number): string {
 	return RAINBOW_COLORS[(level - 1) % RAINBOW_COLORS.length]!;
 }
 
-/** 行首空白按 tab-size 4 展开为等宽空格，保证缩进层级与视觉列一致 */
-function expandTabs(ws: string): string {
+/** 行首空白按 indentSize 展开为等宽空格，保证缩进层级与视觉列一致 */
+function expandTabs(ws: string, tabSize: number): string {
 	let out = "";
 	let col = 0;
 	for (const ch of ws) {
 		if (ch === "\t") {
-			const n = 4 - (col % 4);
+			const n = tabSize - (col % tabSize);
 			out += " ".repeat(n);
 			col += n;
 		} else {
@@ -366,20 +379,21 @@ function expandTabs(ws: string): string {
 	return out;
 }
 
-/** 将行首缩进空白拆为每级一段（每段 unit 空格），供缩进彩虹渲染 */
+/** 将行首缩进空白拆为每级一段（每段 unit 空格），供缩进彩虹渲染。
+ *  只对完整缩进级数生成色块，剩余不足一级的空白交给正文渲染（无底色）。 */
 function buildIndentSegments(
 	ws: string,
 	unit: number,
-): { level: number; spaces: string }[] {
+): { segs: { level: number; spaces: string }[]; remainder: string } {
 	const segs: { level: number; spaces: string }[] = [];
 	let i = 0;
 	let level = 0;
-	while (i < ws.length) {
+	while (i + unit <= ws.length) {
 		level += 1;
 		segs.push({ level, spaces: ws.slice(i, i + unit) });
 		i += unit;
 	}
-	return segs;
+	return { segs, remainder: ws.slice(i) };
 }
 
 /** 缩进段底纹（彩虹色块） */
@@ -401,6 +415,8 @@ interface RenderLine {
 	isFolded: boolean;
 	/** 是否为外部标注行（如冲突区域高亮） */
 	marked: boolean;
+	/** 是否为第二组外部标注行（独立着色） */
+	marked2: boolean;
 }
 
 /** 全文按行拆分（source 变化时重建，供各行模型与水平宽度估算复用） */
@@ -420,6 +436,9 @@ const foldByStart = computed(() => {
 
 /** 外部标注行集合（0 起源行号） */
 const markedSet = computed(() => new Set<number>(props.markedLines));
+
+/** 第二组外部标注行集合（0 起源行号），使用独立的 CSS 变量着色 */
+const markedSet2 = computed(() => new Set<number>(props.markedLines2));
 
 /** 可视区高度（px）：textarea 客户区高度，滚动/缩放时更新 */
 const viewportH = ref(600);
@@ -442,11 +461,13 @@ const visibleRange = computed(() => {
 
 // ---------- 透镜行（lens row） ----------
 
-/** 透镜覆盖条高度（px）：不低于一行行高，并保证小字号下芯片仍可容纳 */
-const lensStripH = computed(() => Math.max(lineHeightPx.value, 20));
+/** 透镜覆盖条高度（px）：比行高多 6px，保证芯片（16px + 边框）上下有余量不裁切；
+ *  最低 22px 防止极小字号下内容溢出 */
+const lensStripH = computed(() => Math.max(lineHeightPx.value + 6, 22));
 
 /** 透镜行渲染模型：把 lensLines 中的源行号映射为显示行号（折叠隐藏的
- *  行跳过），换算成视口内坐标；只渲染可视区内的条带，内容来自 #lens 插槽 */
+ *  行跳过），换算成视口内坐标；只渲染可视区内的条带，内容来自 #lens 插槽。
+ *  透镜以目标行为中心上下对称覆盖，多余高度均分到上下两行（各约 3px，肉眼不易察觉）。 */
 const lensRows = computed(() => {
 	const src = props.lensLines;
 	if (!src || src.length === 0) return [];
@@ -470,7 +491,8 @@ const lensRows = computed(() => {
 			else hi = mid - 1;
 		}
 		if (di < 0) return; // 该行被折叠隐藏：不渲染
-		const top = PAD_Y + di * lh - scrollY.value;
+		// 透镜以目标行为中心：top 向上偏移 (h - lh) / 2，超出部分均分至上下两行
+		const top = PAD_Y + di * lh - scrollY.value - (h - lh) / 2;
 		if (top > viewportH.value || top + h < 0) return; // 视口外
 		out.push({ idx, line, top });
 	});
@@ -504,9 +526,15 @@ const visibleModels = computed<RenderLine[]>(() => {
 		const srcLine = view.value.visibleLines[i]!;
 		const raw = sourceLines.value[srcLine] ?? "";
 		const ws = leadingWhitespace(raw);
-		const segs = buildIndentSegments(expandTabs(ws), unit);
+		const { segs, remainder } = buildIndentSegments(
+			expandTabs(ws, unit),
+			unit,
+		);
 		const lineLang = vueLineLangs.value?.[srcLine] ?? currentLang.value;
-		const bodyHtml = highlightCode(raw.slice(ws.length), lineLang);
+		const bodyHtml = highlightCode(
+			remainder + raw.slice(ws.length),
+			lineLang,
+		);
 		out.push({
 			srcLine,
 			number: srcLine + 1,
@@ -516,6 +544,7 @@ const visibleModels = computed<RenderLine[]>(() => {
 			isFoldStart: foldByStart.value.has(srcLine),
 			isFolded: folded.value.has(srcLine),
 			marked: markedSet.value.has(srcLine),
+			marked2: markedSet2.value.has(srcLine),
 		});
 	}
 	return out;
@@ -1816,6 +1845,7 @@ onBeforeUnmount(() => {
 								selCount === 0,
 							'is-foldable': line.isFoldStart,
 							'is-marked': line.marked,
+							'is-marked-2': line.marked2,
 						}"
 					>
 						<span class="gutter-num">{{ line.number }}</span>
@@ -1897,7 +1927,10 @@ onBeforeUnmount(() => {
 								v-for="line in visibleModels"
 								:key="line.srcLine"
 								class="code-line"
-								:class="{ 'is-marked': line.marked }"
+								:class="{
+									'is-marked': line.marked,
+									'is-marked-2': line.marked2,
+								}"
 							>
 								<span
 									v-for="seg in line.segs"
@@ -2060,22 +2093,26 @@ onBeforeUnmount(() => {
 					@keydown.enter.prevent="replaceCurrent"
 					@keydown.esc.prevent="closeFind"
 				/>
-				<button
-					type="button"
-					class="find-btn"
-					title="替换"
-					@click="replaceCurrent"
-				>
-					<Replace />
-				</button>
-				<button
-					type="button"
-					class="find-btn"
-					title="全部替换"
-					@click="replaceAllMatches"
-				>
-					<ReplaceAll />
-				</button>
+				<Tooltip text="替换" :delay="0">
+					<button
+						type="button"
+						class="find-btn"
+						aria-label="替换"
+						@click="replaceCurrent"
+					>
+						<Replace />
+					</button>
+				</Tooltip>
+				<Tooltip text="全部替换" :delay="0">
+					<button
+						type="button"
+						class="find-btn"
+						aria-label="全部替换"
+						@click="replaceAllMatches"
+					>
+						<ReplaceAll />
+					</button>
+				</Tooltip>
 			</div>
 		</div>
 
@@ -2235,6 +2272,14 @@ onBeforeUnmount(() => {
 	--ed-mark-bg: color-mix(in oklab, var(--yellow, #e3b341) 14%, transparent);
 	--ed-mark-bar: transparent;
 
+	/* 第二组外部标注行默认色（如源码编辑中 C 侧代码行） */
+	--ed-mark-bg-2: color-mix(
+		in oklab,
+		var(--accent, #4c8dff) 14%,
+		transparent
+	);
+	--ed-mark-bar-2: transparent;
+
 	/* 语法高亮（Auto 亮色：GitHub Light 风） */
 	--hl-kw: #cf222e;
 	--hl-str: #0a3069;
@@ -2365,6 +2410,10 @@ onBeforeUnmount(() => {
 	background: var(--ed-mark-bg);
 }
 
+.gutter-line.is-marked-2 {
+	background: var(--ed-mark-bg-2);
+}
+
 .code-pane {
 	position: relative;
 	flex: 1;
@@ -2461,6 +2510,12 @@ onBeforeUnmount(() => {
 .code-line.is-marked {
 	background: var(--ed-mark-bg);
 	box-shadow: inset 2px 0 0 var(--ed-mark-bar);
+}
+
+/* 第二组标注行：独立着色 */
+.code-line.is-marked-2 {
+	background: var(--ed-mark-bg-2);
+	box-shadow: inset 2px 0 0 var(--ed-mark-bar-2);
 }
 
 .indent-seg {

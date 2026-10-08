@@ -190,8 +190,11 @@ function flushEditors() {
 // ------------------------------------------------------------- 编辑器字号（本地偏好）
 
 const FONT_KEY = "gv.coder.fontSize";
+const INDENT_KEY = "gv.coder.indentSize";
 /** 字号仅作用于 Coder 内部排版，不影响应用全局字号；默认与应用标准字号一致 */
 const fontSize = ref(loadFontSize());
+/** 缩进空格数（本地持久化），默认 4 */
+const indentSize = ref(loadIndentSize());
 
 function loadFontSize(): number {
 	try {
@@ -214,6 +217,24 @@ function onFontSizeChange(size: number) {
 	// 行高随字号变化：各窗格原有的 px 滚动偏移不再对应相同行，
 	// 等 Coder 重新度量后重新对齐到当前冲突块
 	if (hunks.value.length > 0) scheduleScrollToHunk(active.value);
+}
+
+function loadIndentSize(): number {
+	try {
+		const n = Number(localStorage.getItem(INDENT_KEY));
+		if (n === 2 || n === 4) return n;
+	} catch {
+		/* ignore */
+	}
+	return 4;
+}
+function onIndentChange(size: number) {
+	indentSize.value = size;
+	try {
+		localStorage.setItem(INDENT_KEY, String(size));
+	} catch {
+		/* ignore */
+	}
 }
 
 /** 当前 Coder 行高（px）：与 Coder 内部度量一致，供滚动留白估算 */
@@ -245,30 +266,33 @@ function updateActive(dLine: number) {
 	active.value = idx;
 }
 
-let syncing = false;
+/** 同步锁计数器：pushSync 中 setScroll 会触发目标面板的 scroll 事件，
+ *  用计数器防止嵌套回环（>0 时 onPaneScroll 直接跳过） */
+let syncing = 0;
 
-/** 把 src 面板的滚动位置按行映射推送到其余面板（程序化滚动不会再回传） */
+/** 把 src 面板的滚动位置按行映射推送到其余面板（程序化滚动不会再回传）。
+ *  用浮点行号映射（mapLineFloat）+ 行高归一化，消除整数舍入导致的跨行抖动。 */
 function pushSync(src: PaneId, top: number, left?: number) {
 	const s = coderOf(src);
 	if (!s) return;
-	const srcLine = s.lineAtScrollTop(top);
-	const frac = top - s.scrollTopForLine(srcLine);
+	const lh = s.lineHeightPx();
+	// 转为浮点行号（含行内子像素偏移）：0.0 = 文件首行顶部
+	const srcLineFloat = (top - s.scrollTopForLine(0)) / lh;
 	const a = align.value;
 	for (const dst of PANES) {
 		if (dst === src) continue;
 		const t = coderOf(dst);
 		if (!t) continue;
-		t.setScroll(
-			t.scrollTopForLine(a.mapLine(src, dst, srcLine)) + frac,
-			left,
-		);
+		const tLh = t.lineHeightPx();
+		const dstLineFloat = a.mapLineFloat(src, dst, srcLineFloat);
+		t.setScroll(t.scrollTopForLine(0) + dstLineFloat * tLh, left);
 	}
 }
 
 /** 任一面板滚动：更新当前冲突块 + 同步其余两个面板 */
 function onPaneScroll(src: PaneId, top: number, left: number) {
-	if (syncing) return;
-	syncing = true;
+	if (syncing > 0) return;
+	syncing++;
 	try {
 		const s = coderOf(src);
 		if (s) {
@@ -279,7 +303,7 @@ function onPaneScroll(src: PaneId, top: number, left: number) {
 		}
 		pushSync(src, top, left);
 	} finally {
-		syncing = false;
+		syncing--;
 	}
 }
 
@@ -443,13 +467,29 @@ const dTheme: Record<string, string> = {
 	"--ed-lens-bg": "color-mix(in oklab, var(--yellow) 15%, var(--bg-app))",
 };
 
+/** source 模式 / 冲突透视 D 面板共用主题：B 侧代码绿底、C 侧代码蓝底，
+ *  透镜条带用绿色调与 B 侧协调（条带位于 <<<<<<< 行即 B 侧首行） */
+const sourceSrcTheme: Record<string, string> = {
+	...coderBase,
+	"--ed-mark-bg": "color-mix(in oklab, var(--green) 14%, transparent)",
+	"--ed-mark-bar": "var(--green)",
+	"--ed-mark-bg-2": "color-mix(in oklab, var(--accent) 14%, transparent)",
+	"--ed-mark-bar-2": "var(--accent)",
+	"--ed-lens-bg": "color-mix(in oklab, var(--green) 16%, var(--bg-app))",
+};
+
 // ------------------------------------------------------------- 冲突块透镜行
 
 /** 各面板透镜行（「保留 xxx」芯片条带）锚定的源行号，与 hunks 一一对应：
- *  B/C = 该冲突块 ours/theirs 段在对应分支文件中的首行，D/源码 = "<<<<<<<" 标记行。
+ *  B/C = 冲突块 ours/theirs 段的前一行（透镜覆盖非冲突代码，冲突内容完全可见），
+ *  D/源码 = "<<<<<<<" 标记行（透镜覆盖冲突标记符，不影响实际代码）。
  *  插槽通过 index（lensLines 下标 = hunks 下标）定位冲突块，重复行号也不会歧义 */
-const lensLinesB = computed(() => align.value.hunkLines.map((l) => l.b));
-const lensLinesC = computed(() => align.value.hunkLines.map((l) => l.c));
+const lensLinesB = computed(() =>
+	align.value.hunkLines.map((l) => Math.max(0, l.b - 1)),
+);
+const lensLinesC = computed(() =>
+	align.value.hunkLines.map((l) => Math.max(0, l.c - 1)),
+);
 const lensLinesD = computed(() => hunks.value.map((h) => h.start));
 
 // ------------------------------------------------------------- 全屏（与 Stash 详情最大化同款：占满整个视口）
@@ -662,23 +702,12 @@ const sideMissingText = computed(() => {
 			</div>
 
 			<div class="actions">
-				<template v-if="mode === 'merge3' && showSideEditors">
-					<button
-						class="btn take-ours"
-						:disabled="hunks.length === 0"
-						:title="'全部冲突块都保留 ' + oursLabel + ' 的内容'"
-						@click="takeAll('ours')"
-					>
-						全部保留 {{ oursLabel }}
-					</button>
-					<button
-						class="btn take-theirs"
-						:disabled="hunks.length === 0"
-						:title="'全部冲突块都保留 ' + theirsLabel + ' 的内容'"
-						@click="takeAll('theirs')"
-					>
-						全部保留 {{ theirsLabel }}
-					</button>
+				<template
+					v-if="
+						showSideEditors &&
+						(mode === 'merge3' || mode === 'source')
+					"
+				>
 					<div class="nav">
 						<button
 							class="btn btn-icon"
@@ -791,14 +820,17 @@ const sideMissingText = computed(() => {
 					:data="text"
 					:filename="path"
 					:language="editorLanguage"
+					:indent-size="indentSize"
 					preserve-scroll
-					:marked-lines="align.marksD"
+					:marked-lines="align.marksDOurSide"
+					:marked-lines-2="align.marksDTheirsSide"
 					:lens-lines="lensLinesD"
-					:theme-vars="dTheme"
+					:theme-vars="sourceSrcTheme"
 					:font-size="fontSize"
 					@change="text = $event"
 					@save="save(false)"
 					@font-size-change="onFontSizeChange"
+					@indent-change="onIndentChange"
 					@language-change="onLanguageChange"
 				>
 					<!-- 每个冲突块顶部的透镜行：保留 B / 保留 C / 保留两者 -->
@@ -893,6 +925,16 @@ const sideMissingText = computed(() => {
 							<span class="dot dot-ours" />
 							<span class="pane-title">B · {{ oursLabel }}</span>
 							<span class="pane-sub">只读 · 绿色为冲突区域</span>
+							<button
+								class="btn take-ours pane-take"
+								:disabled="hunks.length === 0"
+								:title="
+									'全部冲突块都保留 ' + oursLabel + ' 的内容'
+								"
+								@click="takeAll('ours')"
+							>
+								全部保留 {{ oursLabel }}
+							</button>
 						</div>
 						<div class="pane-body">
 							<CoderView
@@ -901,6 +943,7 @@ const sideMissingText = computed(() => {
 								:data="detail?.ours.content ?? ''"
 								:filename="path"
 								:language="editorLanguage"
+								:indent-size="indentSize"
 								readonly
 								:marked-lines="align.marksB"
 								:lens-lines="lensLinesB"
@@ -942,6 +985,18 @@ const sideMissingText = computed(() => {
 								>C · {{ theirsLabel }}</span
 							>
 							<span class="pane-sub">只读 · 蓝色为冲突区域</span>
+							<button
+								class="btn take-theirs pane-take"
+								:disabled="hunks.length === 0"
+								:title="
+									'全部冲突块都保留 ' +
+									theirsLabel +
+									' 的内容'
+								"
+								@click="takeAll('theirs')"
+							>
+								全部保留 {{ theirsLabel }}
+							</button>
 						</div>
 						<div class="pane-body">
 							<CoderView
@@ -950,6 +1005,7 @@ const sideMissingText = computed(() => {
 								:data="detail?.theirs.content ?? ''"
 								:filename="path"
 								:language="editorLanguage"
+								:indent-size="indentSize"
 								readonly
 								:marked-lines="align.marksC"
 								:lens-lines="lensLinesC"
@@ -1020,15 +1076,18 @@ const sideMissingText = computed(() => {
 							:data="text"
 							:filename="path"
 							:language="editorLanguage"
+							:indent-size="indentSize"
 							:preserve-scroll="dPreserve"
-							:marked-lines="align.marksD"
+							:marked-lines="align.marksDOurSide"
+							:marked-lines-2="align.marksDTheirsSide"
 							:lens-lines="lensLinesD"
-							:theme-vars="dTheme"
+							:theme-vars="sourceSrcTheme"
 							:font-size="fontSize"
 							@change="text = $event"
 							@save="save(false)"
 							@scroll="(t, l) => onPaneScroll('d', t, l)"
 							@font-size-change="onFontSizeChange"
+							@indent-change="onIndentChange"
 							@language-change="onLanguageChange"
 						>
 							<!-- 每个冲突块顶部的透镜行：保留 B / 保留 C / 保留两者 -->
@@ -1090,6 +1149,26 @@ const sideMissingText = computed(() => {
 	width: 100vw;
 	height: 100vh;
 	z-index: 900;
+}
+
+/* 全屏工具条：改为三段式布局（文件路径｜模式切换｜操作区），
+   宽屏下模式切换居中、操作区靠右，避免三组元素全挤在左侧；
+   同时放宽文件路径宽度上限，让更完整的路径有展示空间。 */
+.resolver.is-full .bar {
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 14px;
+}
+.resolver.is-full .file {
+	max-width: none;
+}
+.resolver.is-full .modes {
+	justify-self: center;
+}
+.resolver.is-full .actions {
+	justify-self: end;
 }
 
 /* ------------------------------------------------------------------ 工具条 */
@@ -1281,6 +1360,14 @@ const sideMissingText = computed(() => {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+/* 面板头右端的“全部保留”批量按钮：靠右对齐，尺寸压缩以贴合头部高度 */
+.pane-take {
+	margin-left: auto;
+	flex: none;
+	height: 20px;
+	padding: 0 8px;
+	font-size: 10.5px;
 }
 .pane-body {
 	flex: 1;
