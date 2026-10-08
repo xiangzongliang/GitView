@@ -153,7 +153,7 @@ updateManifestPath = "/api/v1/gitview/updates/manifest"
 - `build/darwin/Info.dev.plist` → 同上
 - `appservice.go` → `appVersion` 默认值
 
-> 上述四处当前已统一为 `0.1.7`。发布前请确保它们一致，否则「关于」页显示的版本会与安装包 / 更新清单对不上。
+> 上述四处当前已统一为 `0.1.8`。发布前请确保它们一致，否则「关于」页显示的版本会与安装包 / 更新清单对不上。
 >
 > 两个 plist 是由 `build/config.yml` 生成的资产：改完 `config.yml` 后执行 `wails3 task common:update:build-assets` 会重新生成它们（会覆盖手工改动）。
 
@@ -200,7 +200,7 @@ wails3 build
 wails3 task package
 
 # 3. 打成发布 zip（替换为实际版本号，命名规则：GitView_<版本>_darwin_arm64.zip）
-ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.1.7_darwin_arm64.zip"
+ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.1.8_darwin_arm64.zip"
 ```
 
 产物位置：
@@ -209,7 +209,7 @@ ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.
 | --------------------------------------------------- | ---------------------------------------------------------- |
 | `wails3 build`                                      | `bin/Git View` 可执行文件                                  |
 | `wails3 task package`                               | `bin/Git View.app`                                         |
-| `ditto -c -k --norsrc --noextattr --keepParent ...` | `bin/GitView_0.1.7_darwin_arm64.zip`（上传该文件到更新源） |
+| `ditto -c -k --norsrc --noextattr --keepParent ...` | `bin/GitView_0.1.8_darwin_arm64.zip`（上传该文件到更新源） |
 
 如需生成 **`.dmg` 安装镜像**（仅本地分发，不走更新服务器上传）：
 
@@ -231,7 +231,7 @@ wails3 task package:dmg
 打包后可自行验证 zip 顶层只有一个条目：
 
 ```bash
-unzip -l "bin/GitView_0.1.7_darwin_arm64.zip" | head
+unzip -l "bin/GitView_0.1.8_darwin_arm64.zip" | head
 ```
 
 ### 4.6 各平台打包产物
