@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import type { MenuItem } from "../../stores/ui";
-import type { BranchInfo, TagInfo, StashEntry } from "../../api";
+import type { BranchInfo, RemoteInfo, TagInfo, StashEntry } from "../../api";
 import { copyText } from "../../api";
 import { relTime } from "../../utils/format";
 import Icon from "../ui/Icon.vue";
@@ -13,8 +13,96 @@ const ui = useUI();
 
 const collapsed = reactive<Record<string, boolean>>({});
 const remoteOpen = reactive<Record<string, boolean>>({});
+// branch folder tree: default collapsed
+const branchFolderOpen = reactive<Record<string, boolean>>({});
+// per-remote floating search — reactive Map survives re-renders
+const remoteSearchOpen = reactive(new Map<string, boolean>());
+const remoteSearch = reactive(new Map<string, string>());
+function toggleRemoteSearch(rName: string) {
+	const wasOpen = remoteSearchOpen.get(rName);
+	if (wasOpen) {
+		// close and clear text
+		remoteSearch.set(rName, "");
+		remoteSearchOpen.set(rName, false);
+	} else {
+		remoteSearchOpen.set(rName, true);
+		remoteOpen[rName] = true;
+	}
+}
+function clearAllRemoteSearch() {
+	for (const rName of remoteSearchOpen.keys()) {
+		remoteSearchOpen.set(rName, false);
+	}
+	for (const rName of remoteSearch.keys()) {
+		remoteSearch.set(rName, "");
+	}
+}
+// auto-close search popup when git operations run (checkout/pull/etc)
+watch(
+	() => ui.op,
+	(op) => {
+		if (op) clearAllRemoteSearch();
+	},
+);
+// auto-close when view switches between history/status
+watch(
+	() => repo.view,
+	() => {
+		clearAllRemoteSearch();
+	},
+);
+// auto-close when any dialog opens
+watch(
+	() => ui.dialog,
+	(d) => {
+		if (d) clearAllRemoteSearch();
+	},
+);
+// auto-close when settings/terminal/debug panels open
+watch(
+	() => ui.settingsOpen,
+	(v) => {
+		if (v) clearAllRemoteSearch();
+	},
+);
+watch(
+	() => ui.terminalOpen,
+	(v) => {
+		if (v) clearAllRemoteSearch();
+	},
+);
+watch(
+	() => ui.debugOpen,
+	(v) => {
+		if (v) clearAllRemoteSearch();
+	},
+);
+// auto-close when remote section collapses
+watch(
+	() => collapsed.remotes,
+	(v) => {
+		if (v) clearAllRemoteSearch();
+	},
+);
+function toggleRemoteRow(rName: string) {
+	remoteOpen[rName] = !remoteOpen[rName];
+	if (!remoteOpen[rName]) {
+		// collapsed: clear and close search too
+		remoteSearch.set(rName, "");
+		remoteSearchOpen.set(rName, false);
+	}
+}
 function toggle(key: string) {
 	collapsed[key] = !collapsed[key];
+}
+function isBranchFolderOpen(rName: string, folder: string): boolean {
+	// auto-expand all folders while searching
+	if ((remoteSearch.get(rName) || "").trim()) return true;
+	return branchFolderOpen[rName + "/" + folder] === true;
+}
+function toggleBranchFolder(rName: string, folder: string) {
+	const key = rName + "/" + folder;
+	branchFolderOpen[key] = !isBranchFolderOpen(rName, folder);
 }
 
 /** Promise-based single-line input dialog. */
@@ -90,6 +178,18 @@ function branchMenu(e: MouseEvent, b: BranchInfo) {
 			disabled: b.isCurrent,
 			action: () => repo.rebase(b.name),
 		},
+		{
+			label: "拉取上游（不检出）",
+			icon: "pull",
+			disabled: !b.tracking || b.isCurrent,
+			action: async () => {
+				const idx = b.tracking.indexOf("/");
+				if (idx === -1) return;
+				const remote = b.tracking.substring(0, idx);
+				const remoteBranch = b.tracking.substring(idx + 1);
+				await repo.fetchBranch(remote, remoteBranch, b.name);
+			},
+		},
 		{ separator: true },
 		{
 			label: "重命名…",
@@ -150,6 +250,55 @@ function branchMenu(e: MouseEvent, b: BranchInfo) {
 function shortName(full: string, remote: string): string {
 	const prefix = remote + "/";
 	return full.startsWith(prefix) ? full.slice(prefix.length) : full;
+}
+
+// ---- branch tree grouping
+interface BranchTreeBranch {
+	type: "branch";
+	branch: BranchInfo;
+}
+interface BranchTreeFolder {
+	type: "folder";
+	name: string;
+	branches: { branch: BranchInfo; short: string; leaf: string }[];
+}
+type BranchTreeItem = BranchTreeBranch | BranchTreeFolder;
+
+/** Group a remote's branches by the first path segment (before /). */
+function getBranchTreeItems(remote: RemoteInfo): BranchTreeItem[] {
+	const q = (remoteSearch.get(remote.name) || "").trim().toLowerCase();
+	const folders = new Map<
+		string,
+		{ branch: BranchInfo; short: string; leaf: string }[]
+	>();
+	const flat: BranchTreeBranch[] = [];
+
+	for (const b of remote.branches || []) {
+		const short = shortName(b.name, remote.name);
+		// fuzzy filter by query
+		if (q && !short.toLowerCase().includes(q)) continue;
+
+		const idx = short.indexOf("/");
+		if (idx === -1) {
+			flat.push({ type: "branch", branch: b });
+		} else {
+			const folder = short.substring(0, idx);
+			const leaf = short.substring(idx + 1);
+			if (!folders.has(folder)) folders.set(folder, []);
+			folders.get(folder)!.push({ branch: b, short, leaf });
+		}
+	}
+
+	// Sort folders alphabetically, branches within each folder by leaf name
+	const result: BranchTreeItem[] = [...flat];
+	const sortedFolders = [...folders.entries()].sort((a, b) =>
+		a[0].localeCompare(b[0]),
+	);
+	for (const [name, branches] of sortedFolders) {
+		branches.sort((a, b) => a.leaf.localeCompare(b.leaf));
+		result.push({ type: "folder", name, branches });
+	}
+	return result;
 }
 
 async function checkoutRemoteBranch(full: string, remote: string) {
@@ -493,54 +642,232 @@ async function stashClearAll() {
 			</div>
 			<template v-if="!collapsed.remotes">
 				<template v-for="r in remotes" :key="r.name">
-					<div
-						class="nav-row remote-row"
-						:title="r.url"
-						@click="remoteOpen[r.name] = !remoteOpen[r.name]"
-						@contextmenu="remoteMenu($event, r.name)"
-					>
-						<Icon
-							:name="
-								remoteOpen[r.name]
-									? 'chevron-down'
-									: 'chevron-right'
-							"
-							:size="12"
-							class="faint"
-						/>
-						<Icon name="cloud" :size="12" class="purple-ic" />
-						<span class="nav-name">{{ r.name }}</span>
-						<span class="sec-count">{{
-							(r.branches || []).length
-						}}</span>
-					</div>
-					<div v-if="remoteOpen[r.name]" class="child-body">
-						<div
-							v-for="b in r.branches || []"
-							:key="b.name"
-							class="nav-row child"
-							:class="{
-								selected:
-									repo.logRef === b.name &&
-									repo.view === 'history',
-							}"
-							:title="
-								b.subject ? b.name + ' — ' + b.subject : b.name
-							"
-							@click="clickBranch(b.name)"
-							@dblclick="checkoutRemoteBranch(b.name, r.name)"
-							@contextmenu="remoteBranchMenu($event, b)"
-						>
-							<Icon name="branch" :size="11" class="faint" />
-							<span class="nav-name">{{
-								shortName(b.name, r.name)
-							}}</span>
+					<div class="remote-group">
+						<div class="remote-row-wrap">
+							<div
+								class="nav-row remote-row"
+								:title="r.url"
+								@click="toggleRemoteRow(r.name)"
+								@contextmenu="remoteMenu($event, r.name)"
+							>
+								<Icon
+									:name="
+										remoteOpen[r.name]
+											? 'chevron-down'
+											: 'chevron-right'
+									"
+									:size="12"
+									class="faint"
+								/>
+								<Icon
+									name="cloud"
+									:size="12"
+									class="purple-ic"
+								/>
+								<span class="nav-name">{{ r.name }}</span>
+								<button
+									class="branch-search-trigger"
+									@click.stop="toggleRemoteSearch(r.name)"
+									:title="
+										remoteSearchOpen.get(r.name)
+											? '关闭筛选'
+											: '筛选分支'
+									"
+								>
+									<Icon name="search" :size="10" />
+								</button>
+								<span class="sec-count">{{
+									(r.branches || []).length
+								}}</span>
+							</div>
+							<!-- floating search popup -->
+							<div
+								v-if="
+									remoteSearchOpen.get(r.name) ||
+									(remoteSearch.get(r.name) || '').trim()
+								"
+								class="branch-search-floating"
+							>
+								<div class="branch-search">
+									<Icon
+										name="search"
+										:size="11"
+										class="branch-search-icon"
+									/>
+									<input
+										:value="remoteSearch.get(r.name) || ''"
+										@input="
+											remoteSearch.set(
+												r.name,
+												(
+													$event.target as HTMLInputElement
+												).value,
+											)
+										"
+										type="text"
+										placeholder="筛选分支…"
+										spellcheck="false"
+									/>
+									<button
+										v-if="remoteSearch.get(r.name)"
+										class="btn-icon branch-search-clear"
+										title="清除"
+										@click="
+											remoteSearch.set(r.name, '');
+											remoteSearchOpen.set(r.name, false);
+										"
+									>
+										<Icon name="x" :size="10" />
+									</button>
+								</div>
+							</div>
 						</div>
-						<div
-							v-if="(r.branches || []).length === 0"
-							class="nav-empty child"
-						>
-							没有远程分支（试试 Fetch）
+						<div v-if="remoteOpen[r.name]" class="child-body">
+							<template
+								v-for="item in getBranchTreeItems(r)"
+								:key="
+									item.type === 'branch'
+										? item.branch.name
+										: 'folder-' + item.name
+								"
+							>
+								<!-- flat branch -->
+								<div
+									v-if="item.type === 'branch'"
+									class="nav-row child"
+									:class="{
+										selected:
+											repo.logRef === item.branch.name &&
+											repo.view === 'history',
+									}"
+									:title="
+										item.branch.subject
+											? item.branch.name +
+												' — ' +
+												item.branch.subject
+											: item.branch.name
+									"
+									@click="clickBranch(item.branch.name)"
+									@dblclick="
+										checkoutRemoteBranch(
+											item.branch.name,
+											r.name,
+										)
+									"
+									@contextmenu="
+										remoteBranchMenu($event, item.branch)
+									"
+								>
+									<Icon
+										name="branch"
+										:size="11"
+										class="faint"
+									/>
+									<span class="nav-name">{{
+										shortName(item.branch.name, r.name)
+									}}</span>
+								</div>
+								<!-- folder -->
+								<template v-else>
+									<div
+										class="nav-row child folder-row"
+										@click="
+											toggleBranchFolder(
+												r.name,
+												item.name,
+											)
+										"
+									>
+										<Icon
+											:name="
+												isBranchFolderOpen(
+													r.name,
+													item.name,
+												)
+													? 'chevron-down'
+													: 'chevron-right'
+											"
+											:size="12"
+											class="faint"
+										/>
+										<Icon
+											name="folder"
+											:size="11"
+											class="faint"
+										/>
+										<span class="nav-name">{{
+											item.name
+										}}</span>
+										<span class="sec-count">{{
+											item.branches.length
+										}}</span>
+									</div>
+									<div
+										v-if="
+											isBranchFolderOpen(
+												r.name,
+												item.name,
+											)
+										"
+										class="child-body"
+									>
+										<div
+											v-for="sub in item.branches"
+											:key="sub.branch.name"
+											class="nav-row child child-deep"
+											:class="{
+												selected:
+													repo.logRef ===
+														sub.branch.name &&
+													repo.view === 'history',
+											}"
+											:title="
+												sub.branch.subject
+													? sub.branch.name +
+														' — ' +
+														sub.branch.subject
+													: sub.branch.name
+											"
+											@click="
+												clickBranch(sub.branch.name)
+											"
+											@dblclick="
+												checkoutRemoteBranch(
+													sub.branch.name,
+													r.name,
+												)
+											"
+											@contextmenu="
+												remoteBranchMenu(
+													$event,
+													sub.branch,
+												)
+											"
+										>
+											<Icon
+												name="branch"
+												:size="11"
+												class="faint"
+											/>
+											<span class="nav-name">{{
+												sub.leaf
+											}}</span>
+										</div>
+									</div>
+								</template>
+							</template>
+							<div
+								v-if="(r.branches || []).length === 0"
+								class="nav-empty child"
+							>
+								没有远程分支（试试 Fetch）
+							</div>
+							<div
+								v-else-if="getBranchTreeItems(r).length === 0"
+								class="nav-empty child"
+							>
+								没有匹配的分支
+							</div>
 						</div>
 					</div>
 				</template>
@@ -688,6 +1015,20 @@ async function stashClearAll() {
 	height: 20px;
 	flex: none;
 }
+.branch-search-trigger {
+	width: 16px;
+	height: 16px;
+	flex: none;
+	color: var(--text-faint);
+	border-radius: 3px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.branch-search-trigger:hover {
+	color: var(--text-strong);
+	background: var(--bg-hover);
+}
 .nav-row {
 	display: flex;
 	align-items: center;
@@ -715,6 +1056,10 @@ async function stashClearAll() {
 .nav-row.child {
 	padding-left: calc(var(--sb-l2) - var(--sb-gutter));
 }
+/* 三级项（文件夹内的远程分支）：再缩进一级 */
+.nav-row.child-deep {
+	padding-left: calc(var(--sb-l2) + 18px);
+}
 /* 远程分支容器：树形层级引导线（与远程图标左缘对齐） */
 .child-body {
 	position: relative;
@@ -729,6 +1074,67 @@ async function stashClearAll() {
 	background: var(--tree-line);
 	pointer-events: none;
 }
+
+/* 远程分支搜索框 */
+.branch-search {
+	position: relative;
+	display: flex;
+	align-items: center;
+	margin: 2px 4px 4px 4px;
+}
+.branch-search input {
+	width: 100%;
+	height: 24px;
+	padding: 0 24px 0 26px;
+	font-size: 11.5px;
+	border-radius: 5px;
+	border: 1px solid var(--border);
+	background: var(--bg-input);
+	color: var(--text);
+}
+.branch-search input::placeholder {
+	color: var(--text-faint);
+}
+.branch-search input:focus {
+	border-color: var(--accent);
+	outline: none;
+}
+.branch-search-icon {
+	position: absolute;
+	left: 7px;
+	color: var(--text-faint);
+	pointer-events: none;
+}
+.branch-search-clear {
+	position: absolute;
+	right: 2px;
+	width: 18px;
+	height: 18px;
+	flex: none;
+}
+
+/* remote group: anchor for floating search popup */
+.remote-row-wrap {
+	position: relative;
+}
+
+/* floating search popup: absolutely positioned, no layout jitter */
+.branch-search-floating {
+	position: absolute;
+	top: 100%;
+	right: 52px;
+	width: 150px;
+	z-index: 5;
+	background: var(--bg-panel);
+	border: 1px solid var(--border-strong);
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+	padding: 3px;
+}
+.branch-search-floating .branch-search {
+	margin: 0;
+}
+
 .remote-row {
 	color: var(--text);
 }

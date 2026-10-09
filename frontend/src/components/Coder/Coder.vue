@@ -111,6 +111,9 @@ interface Props {
 	 *  不透明的覆盖条，内容由 #lens 作用域插槽提供（如冲突块的「保留 xxx」芯片）。
 	 *  覆盖条随内容垂直滚动，但水平方向固定（不随横向滚动平移）。 */
 	lensLines?: number[];
+	/** 行级内联标注：在指定行（1 起）的代码后面显示标注文本，
+	 *  如 git blame 的作者与时间。为 null 时不显示。 */
+	lineAnnotation?: { line: number; text: string } | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -128,6 +131,7 @@ const props = withDefaults(defineProps<Props>(), {
 	statusControls: true,
 	lensLines: () => [],
 	markedLines2: () => [],
+	lineAnnotation: null,
 });
 
 const emit = defineEmits<{
@@ -143,6 +147,10 @@ const emit = defineEmits<{
 	fold: [visibleLines: number];
 	/** 滚动位置变化（用户滚动或组件内部滚动；外部调用 setScroll 不触发，避免同步回环） */
 	scroll: [top: number, left: number];
+	/** 光标行号变化（1 起）：供外层显示该行的 blame 信息或右键上下文 */
+	cursorChange: [line: number];
+	/** 右键点击：携带行号（1 起）和原始事件，供外层弹出上下文菜单 */
+	contextmenu: [line: number, event: MouseEvent];
 }>();
 
 // ---------- 字号度量（字号可调；行高/光标随字号缩放） ----------
@@ -632,11 +640,13 @@ function updateCursor() {
 	const value = text.value;
 	const start = el.selectionStart ?? 0;
 	const end = el.selectionEnd ?? 0;
+	const prev = cursorLine.value;
 	cursorLine.value = value.slice(0, start).split("\n").length;
 	const lineStart = lineStartIndex(value, start);
 	cursorCol.value = start - lineStart + 1;
 	selCount.value = end - start;
 	activeLineNo.value = cursorLine.value;
+	if (cursorLine.value !== prev) emit("cursorChange", cursorLine.value);
 
 	caretY.value = (cursorLine.value - 1) * lineHeightPx.value;
 	// X 坐标用镜像元素精确测量：把当前行光标前的文本放进同排版
@@ -673,6 +683,17 @@ function onFocus() {
 function onBlur() {
 	focused.value = false;
 	hideCompletion();
+}
+
+/** 右键点击：从鼠标位置反推行号，发射 contextmenu 事件供外层弹出自定义菜单 */
+function onContextMenu(e: MouseEvent) {
+	const el = taRef.value;
+	if (!el) return;
+	// 从鼠标在 textarea 内部的垂直偏移 + 当前滚动量推算行号
+	const rect = el.getBoundingClientRect();
+	const offsetY = e.clientY - rect.top + el.scrollTop - PAD_Y;
+	const line = Math.max(1, Math.floor(offsetY / lineHeightPx.value) + 1);
+	emit("contextmenu", line, e);
 }
 
 function caretTo(start: number, end = start) {
@@ -1778,6 +1799,8 @@ defineExpose({
 	lineHeightPx: () => lineHeightPx.value,
 	/** 当前字号（px） */
 	fontSizePx: () => fontSizePx.value,
+	/** 当前光标所在行号（1 起）：供外层读取 blame / 右键上下文所操作的行 */
+	getCursorLine: () => cursorLine.value,
 });
 
 onMounted(() => {
@@ -1943,6 +1966,16 @@ onBeforeUnmount(() => {
 									class="code-body"
 									v-html="line.bodyHtml"
 								/>
+								<span
+									v-if="
+										lineAnnotation &&
+										lineAnnotation.line ===
+											line.displayIndex + 1
+									"
+									class="line-annot"
+								>
+									{{ lineAnnotation.text }}
+								</span>
 							</div>
 							<div
 								:style="{
@@ -1993,6 +2026,7 @@ onBeforeUnmount(() => {
 					@keyup="updateCursor"
 					@mouseup="updateCursor"
 					@click="updateCursor"
+					@contextmenu.prevent="onContextMenu"
 					@select="updateCursor"
 					@focus="onFocus"
 					@blur="onBlur"
@@ -2529,6 +2563,18 @@ onBeforeUnmount(() => {
 .code-body {
 	display: inline;
 	white-space: pre;
+}
+
+/* 行级内联标注（如 git blame 作者和时间）：在代码行末尾以淡化文字展示 */
+.line-annot {
+	display: inline;
+	margin-left: 2em;
+	font-size: 0.85em;
+	color: var(--text-faint);
+	font-style: italic;
+	white-space: pre;
+	user-select: none;
+	pointer-events: none;
 }
 
 .coder-input {

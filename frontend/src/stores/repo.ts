@@ -610,6 +610,28 @@ export const useRepo = defineStore("repo", {
 				useUI().success("Pull 完成", (out || "").trim() || undefined);
 			await this.refreshAll();
 		},
+		async fetchBranch(
+			remote: string,
+			remoteBranch: string,
+			localBranch: string,
+		) {
+			const out = await this.runOp(
+				"拉取 " + remote + "/" + remoteBranch + " → " + localBranch,
+				() =>
+					GitService.RunGitStep(
+						this.path,
+						["fetch", remote, remoteBranch + ":" + localBranch],
+						true,
+					),
+				{ silent: true, key: "fetch" },
+			);
+			if (out !== null) {
+				useUI().success(
+					"拉取完成",
+					(out.output || "").trim() || undefined,
+				);
+			}
+		},
 		async push(opts: PushOptions) {
 			const out = await this.runOp(
 				"Push",

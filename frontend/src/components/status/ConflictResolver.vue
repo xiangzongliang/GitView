@@ -15,13 +15,21 @@
 // 字号/语言在 D（或源码编辑）的状态栏统一调整，同步应用到 B/C 三个编辑器；
 // 字号本地持久化。冲突块解析始终以 D 的当前内容为准（扫描 <<<<<<< /
 // ======= / >>>>>>> 标记），因此手动编辑 D 之后快捷按钮依然定位准确。
-import { computed, nextTick, ref, watch } from "vue";
+import {
+	computed,
+	nextTick,
+	onBeforeUnmount,
+	onMounted,
+	ref,
+	watch,
+} from "vue";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { errMsg, GitService } from "../../api";
-import type { ConflictDetail } from "../../api";
+import type { Commit, CommitFile, ConflictDetail } from "../../api";
 import Icon from "../ui/Icon.vue";
 import Spinner from "../ui/Spinner.vue";
+import DiffViewer from "../common/DiffViewer.vue";
 import {
 	CODER_DEFAULT_FONT_SIZE,
 	CoderView,
@@ -34,6 +42,7 @@ import {
 	type Hunk,
 	type PaneId,
 } from "../../utils/mergeAlign";
+import { statusColor } from "../../utils/format";
 
 const props = defineProps<{ path: string }>();
 
@@ -60,6 +69,393 @@ const loading = ref(false);
 const saving = ref(false);
 const detail = ref<ConflictDetail | null>(null);
 const loadError = ref("");
+
+// ------------------------------------------------------------- 行级 blame 标注与右键历史
+
+/** 当前光标行的 blame 信息（仅在 D 面板 / 源码编辑模式下启用） */
+const annotLine = ref<{ line: number; author: string; time: string } | null>(
+	null,
+);
+const annotLoading = ref(false);
+/** blast debounce timer：避免快速移动光标时频繁调用 git */
+let annotTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 右键自定义上下文菜单 */
+const ctxMenuVisible = ref(false);
+const ctxMenuX = ref(0);
+const ctxMenuY = ref(0);
+const ctxMenuLine = ref(1);
+
+/** 防止拖拽抽屉宽度后末尾的 click 事件误关闭抽屉 */
+let lastDragEnd = 0;
+
+/** 历史记录抽屉（从右侧滑入，可拖拽调整宽度，存储为 vw 百分比） */
+const DRAWER_KEY = "gv.conflict.drawerW";
+const drawerVisible = ref(false);
+function loadDrawerWidth(): number {
+	const raw = Number(localStorage.getItem(DRAWER_KEY));
+	if (!raw || isNaN(raw)) return 50;
+	// 旧格式兼容：> 100 的值为旧像素值，转换为 vw
+	if (raw > 100) {
+		return Math.round(
+			Math.max(10, Math.min(90, (raw / window.innerWidth) * 100)),
+		);
+	}
+	return Math.max(10, Math.min(90, raw));
+}
+const drawerWidth = ref(loadDrawerWidth());
+const drawerTitle = ref("");
+const drawerCommits = ref<
+	Array<{
+		hash: string;
+		fullHash: string;
+		author: string;
+		time: string;
+		subject: string;
+	}>
+>([]);
+const drawerLoading = ref(false);
+/** 当前在提交列表中选中的提交（fullHash），用于高亮与右侧详情 */
+const drawerActiveHash = ref("");
+/** 选中提交的详情：元数据 + 变更文件列表 */
+const drawerCommitInfo = ref<Commit | null>(null);
+const drawerCommitFiles = ref<CommitFile[]>([]);
+const drawerFilesLoading = ref(false);
+/** 在文件列表中选中的文件 */
+const drawerSelectedFile = ref("");
+const drawerFileDiff = ref("");
+const drawerFileDiffLoading = ref(false);
+
+/** 行标注：当前光标行的 blame 信息，传给 Coder 在该行后面内联渲染 */
+const lineAnnot = computed(() => {
+	if (!annotLine.value) return null;
+	return {
+		line: annotLine.value.line,
+		text: `${annotLine.value.author} · ${annotLine.value.time}`,
+	};
+});
+
+/** 把 Unix 秒转为可读的「X 天前 / Y 小时前 / 日期」字符串 */
+function relativeTime(ts: number): string {
+	const now = Math.floor(Date.now() / 1000);
+	const diff = now - ts;
+	if (diff < 60) return "刚刚";
+	if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+	if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+	if (diff < 2592000) return `${Math.floor(diff / 86400)} 天前`;
+	return new Date(ts * 1000).toLocaleDateString("zh-CN");
+}
+
+/** 解析 git blame --porcelain 单行输出，返回 { author, time } */
+function parseBlameLine(
+	output: string,
+): { author: string; time: string } | null {
+	if (!output.trim()) return null;
+	let author = "";
+	let ts = 0;
+	for (const line of output.split("\n")) {
+		if (line.startsWith("author ")) author = line.slice(7);
+		else if (line.startsWith("author-time ")) ts = Number(line.slice(12));
+	}
+	if (!author) return null;
+	return { author, time: ts > 0 ? relativeTime(ts) : "" };
+}
+
+/** 解析 git log --oneline --format=... 的多行输出为历史记录列表 */
+function parseLogLines(output: string): Array<{
+	hash: string;
+	fullHash: string;
+	author: string;
+	time: string;
+	subject: string;
+}> {
+	const commits: Array<{
+		hash: string;
+		fullHash: string;
+		author: string;
+		time: string;
+		subject: string;
+	}> = [];
+	for (const line of output.trim().split("\n")) {
+		if (!line.trim()) continue;
+		// 期望格式：HASH \x1f AUTHOR \x1f TIMESTAMP \x1f SUBJECT
+		const parts = line.split("\x1f");
+		if (parts.length < 4) continue;
+		const fullHash = parts[0]!.trim();
+		const author = parts[1]!.trim();
+		const ts = Number(parts[2]);
+		const subject = parts.slice(3).join("\x1f").trim();
+		commits.push({
+			hash: fullHash.length > 8 ? fullHash.slice(0, 8) : fullHash,
+			fullHash,
+			author,
+			time: ts > 0 ? relativeTime(ts) : "",
+			subject,
+		});
+	}
+	return commits;
+}
+
+/** 当前哪个编辑器被操作：'d'（冲突透视 D 面板）| 'src'（源码编辑） */
+type BlameTarget = "d" | "src";
+
+/** 取对应目标的 Coder 实例 */
+function coderForBlame(t: BlameTarget): CoderInst | null {
+	return t === "d" ? dCoder.value : srcCoder.value;
+}
+
+/** 光标移动到新行：延迟获取该行的 blame 信息（只在 D / 源码编辑模式下启用） */
+function onCoderCursorChange(line: number, target: BlameTarget) {
+	if (annotTimer) clearTimeout(annotTimer);
+	annotTimer = setTimeout(() => {
+		annotTimer = null;
+		void fetchBlame(line, target);
+	}, 300);
+}
+
+/** 右键弹出：记录行号和位置，显示自定义菜单 */
+function onCoderContextMenu(line: number, e: MouseEvent, target: BlameTarget) {
+	ctxMenuLine.value = line;
+	ctxMenuX.value = e.clientX;
+	ctxMenuY.value = e.clientY;
+	ctxMenuVisible.value = true;
+	// 同时把光标行设置为该行，方便 blame 展示
+	onCoderCursorChange(line, target);
+}
+
+function closeContextMenu() {
+	ctxMenuVisible.value = false;
+}
+
+function closeDrawer() {
+	drawerVisible.value = false;
+	drawerActiveHash.value = "";
+	drawerCommitInfo.value = null;
+	drawerCommitFiles.value = [];
+	drawerSelectedFile.value = "";
+	drawerFileDiff.value = "";
+}
+
+/** 获取指定行的 blame 信息 */
+async function fetchBlame(line: number, target: BlameTarget) {
+	if (!props.path || !repo.path) return;
+	// 只对 D（合并结果）或源码编辑启用：它们显示的是 worktree 内容，
+	// blame 有明确含义（指向该行最后一次变更的提交）
+	annotLoading.value = true;
+	try {
+		const res = await GitService.RunGitStep(
+			repo.path,
+			["blame", "--porcelain", "-L", `${line},${line}`, "--", props.path],
+			false,
+		);
+		if (res?.ok) {
+			const info = parseBlameLine(res.output);
+			if (info) {
+				annotLine.value = { line, ...info };
+			} else {
+				annotLine.value = null;
+			}
+		} else {
+			annotLine.value = null;
+		}
+	} catch {
+		annotLine.value = null;
+	} finally {
+		annotLoading.value = false;
+	}
+}
+
+/** 查看当前行的历史：展示文件变更历史，并在列表中高亮 blame 定位到的最近一次提交 */
+async function showLineHistory(line: number) {
+	closeContextMenu();
+	if (!props.path || !repo.path) return;
+	drawerTitle.value = `${props.path} 的变更历史`;
+	drawerCommits.value = [];
+	drawerActiveHash.value = "";
+	drawerCommitInfo.value = null;
+	drawerCommitFiles.value = [];
+	drawerSelectedFile.value = "";
+	drawerFileDiff.value = "";
+	drawerVisible.value = true;
+	drawerLoading.value = true;
+	try {
+		// 使用 git log -- <file> 获取文件变更历史（比 -L 更稳定可靠）
+		const res = await GitService.RunGitStep(
+			repo.path,
+			[
+				"log",
+				"--format=%H%x1f%an%x1f%at%x1f%s",
+				"-n",
+				"50",
+				"--",
+				props.path,
+			],
+			false,
+		);
+		if (res?.ok) {
+			drawerCommits.value = parseLogLines(res.output);
+			if (drawerCommits.value.length > 0) {
+				// 如果已获取当前行的 blame，尝试定位到最近一次修改该行的提交
+				if (annotLine.value && annotLine.value.line === line) {
+					const blameAuthor = annotLine.value.author;
+					const match = drawerCommits.value.find(
+						(c) => c.author === blameAuthor,
+					);
+					if (match) {
+						void selectDrawerCommit(match.fullHash);
+						return;
+					}
+				}
+				// 否则默认选中最近一次提交
+				void selectDrawerCommit(drawerCommits.value[0]!.fullHash);
+			}
+		}
+	} catch {
+		/* ignore */
+	} finally {
+		drawerLoading.value = false;
+	}
+}
+
+/** 查看当前文件的变更历史（git log -- <file>）：在右侧抽屉中展示 */
+async function showFileHistory() {
+	closeContextMenu();
+	if (!props.path || !repo.path) return;
+	drawerTitle.value = `${props.path} 的变更历史`;
+	drawerCommits.value = [];
+	drawerActiveHash.value = "";
+	drawerCommitInfo.value = null;
+	drawerCommitFiles.value = [];
+	drawerSelectedFile.value = "";
+	drawerFileDiff.value = "";
+	drawerVisible.value = true;
+	drawerLoading.value = true;
+	try {
+		const res = await GitService.RunGitStep(
+			repo.path,
+			[
+				"log",
+				"--format=%H%x1f%an%x1f%at%x1f%s",
+				"-n",
+				"50",
+				"--",
+				props.path,
+			],
+			false,
+		);
+		if (res?.ok) {
+			drawerCommits.value = parseLogLines(res.output);
+			// 默认选中最近一次提交
+			if (drawerCommits.value.length > 0) {
+				void selectDrawerCommit(drawerCommits.value[0]!.fullHash);
+			}
+		}
+	} catch {
+		/* ignore */
+	} finally {
+		drawerLoading.value = false;
+	}
+}
+
+/** 在抽屉中选择一个提交：获取完整提交信息 + 变更文件列表，自动展开第一个文件的 diff */
+async function selectDrawerCommit(fullHash: string) {
+	if (!repo.path) return;
+	drawerActiveHash.value = fullHash;
+	drawerCommitInfo.value = null;
+	drawerCommitFiles.value = [];
+	drawerSelectedFile.value = "";
+	drawerFileDiff.value = "";
+	drawerFilesLoading.value = true;
+	try {
+		const [full, files] = await Promise.all([
+			GitService.ShowCommit(repo.path, fullHash),
+			GitService.CommitFiles(repo.path, fullHash),
+		]);
+		drawerCommitInfo.value = full;
+		drawerCommitFiles.value = files || [];
+		// 自动选中与当前文件匹配的第一个（或第一个文件）
+		const target = props.path
+			? ((files || []).find((f) => f.path === props.path) ??
+				(files || [])[0])
+			: (files || [])[0];
+		if (target) {
+			void selectDrawerFile(fullHash, target.path ?? "");
+		}
+	} catch (e) {
+		/* ignore */
+	} finally {
+		drawerFilesLoading.value = false;
+	}
+}
+
+/** 在抽屉中选择某个变更文件，获取其 diff */
+async function selectDrawerFile(commitHash: string, filePath: string) {
+	if (!repo.path) return;
+	drawerSelectedFile.value = filePath;
+	drawerFileDiff.value = "";
+	drawerFileDiffLoading.value = true;
+	try {
+		const diff = await GitService.CommitDiff(
+			repo.path,
+			commitHash,
+			filePath,
+		);
+		drawerFileDiff.value = diff || "";
+	} catch (e) {
+		drawerFileDiff.value = `获取差异失败：${errMsg(e)}`;
+	} finally {
+		drawerFileDiffLoading.value = false;
+	}
+}
+
+/** 拖拽抽屉左缘调整宽度（基于视口宽度 vw） */
+function startDrawerDrag(e: PointerEvent) {
+	e.preventDefault();
+	const startX = e.clientX;
+	const startW = drawerWidth.value;
+	const pxPerVw = window.innerWidth / 100;
+	const move = (ev: PointerEvent) => {
+		const deltaVw = (startX - ev.clientX) / pxPerVw;
+		drawerWidth.value = Math.max(10, Math.min(90, startW + deltaVw));
+	};
+	const up = () => {
+		window.removeEventListener("pointermove", move);
+		window.removeEventListener("pointerup", up);
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		lastDragEnd = Date.now();
+		try {
+			localStorage.setItem(
+				DRAWER_KEY,
+				String(Math.round(drawerWidth.value)),
+			);
+		} catch {
+			/* ignore */
+		}
+	};
+	window.addEventListener("pointermove", move);
+	window.addEventListener("pointerup", up);
+	document.body.style.cursor = "col-resize";
+	document.body.style.userSelect = "none";
+}
+
+/** 点击菜单外区域时关闭 */
+function onCtxMenuDocClick(e: MouseEvent) {
+	const target = e.target as HTMLElement | null;
+	// 右键菜单：点击菜单外任意位置关闭
+	if (ctxMenuVisible.value && target && !target.closest(".ctx-menu")) {
+		closeContextMenu();
+	}
+	// 历史抽屉：点击抽屉外关闭，但忽略拖拽宽度后的末尾 click 事件
+	if (
+		drawerVisible.value &&
+		target &&
+		!target.closest(".blame-drawer") &&
+		Date.now() - lastDragEnd > 300
+	) {
+		closeDrawer();
+	}
+}
 
 /** D：合并结果（= 工作区文件当前内容），唯一数据源 */
 const text = ref("");
@@ -168,6 +564,7 @@ interface CoderInst {
 	scrollTopForLine(line: number): number;
 	lineHeightPx(): number;
 	fontSizePx(): number;
+	getCursorLine(): number;
 }
 
 const bCoder = ref<CoderInst | null>(null);
@@ -552,6 +949,10 @@ watch(
 	() => props.path,
 	async (p, old) => {
 		if (p === old) return;
+		// 切换文件时清除 blame 标注
+		annotLine.value = null;
+		closeContextMenu();
+		closeDrawer();
 		flushEditors();
 		if (dirty.value && old) {
 			const ok = await ui.confirm({
@@ -582,6 +983,15 @@ watch(
 );
 
 void load();
+
+// 点击菜单外区域关闭右键菜单
+onMounted(() => {
+	document.addEventListener("click", onCtxMenuDocClick, true);
+});
+onBeforeUnmount(() => {
+	document.removeEventListener("click", onCtxMenuDocClick, true);
+	if (annotTimer) clearTimeout(annotTimer);
+});
 
 /** 保存到工作区；markResolved 时顺带暂存标记冲突已解决 */
 async function save(markResolved = false) {
@@ -827,11 +1237,16 @@ const sideMissingText = computed(() => {
 					:lens-lines="lensLinesD"
 					:theme-vars="sourceSrcTheme"
 					:font-size="fontSize"
+					:line-annotation="lineAnnot"
 					@change="text = $event"
 					@save="save(false)"
 					@font-size-change="onFontSizeChange"
 					@indent-change="onIndentChange"
 					@language-change="onLanguageChange"
+					@cursor-change="(line) => onCoderCursorChange(line, 'src')"
+					@contextmenu="
+						(line, e) => onCoderContextMenu(line, e, 'src')
+					"
 				>
 					<!-- 每个冲突块顶部的透镜行：保留 B / 保留 C / 保留两者 -->
 					<template #lens="{ index }">
@@ -1083,12 +1498,19 @@ const sideMissingText = computed(() => {
 							:lens-lines="lensLinesD"
 							:theme-vars="sourceSrcTheme"
 							:font-size="fontSize"
+							:line-annotation="lineAnnot"
 							@change="text = $event"
 							@save="save(false)"
 							@scroll="(t, l) => onPaneScroll('d', t, l)"
 							@font-size-change="onFontSizeChange"
 							@indent-change="onIndentChange"
 							@language-change="onLanguageChange"
+							@cursor-change="
+								(line) => onCoderCursorChange(line, 'd')
+							"
+							@contextmenu="
+								(line, e) => onCoderContextMenu(line, e, 'd')
+							"
 						>
 							<!-- 每个冲突块顶部的透镜行：保留 B / 保留 C / 保留两者 -->
 							<template #lens="{ index }">
@@ -1128,6 +1550,208 @@ const sideMissingText = computed(() => {
 			</div>
 		</div>
 	</div>
+
+	<!-- 右键上下文菜单 -->
+	<teleport to="body">
+		<div
+			v-if="ctxMenuVisible"
+			class="ctx-menu"
+			:style="{ left: ctxMenuX + 'px', top: ctxMenuY + 'px' }"
+			@click.stop
+		>
+			<button
+				type="button"
+				class="ctx-item"
+				@click="showLineHistory(ctxMenuLine)"
+			>
+				<Icon name="history" :size="13" />
+				<span>查看本行历史</span>
+			</button>
+			<button type="button" class="ctx-item" @click="showFileHistory()">
+				<Icon name="file-text" :size="13" />
+				<span>查看文件历史</span>
+			</button>
+		</div>
+	</teleport>
+
+	<!-- 历史记录抽屉（从右侧滑入，可拖拽调整宽度） -->
+	<teleport to="body">
+		<div
+			v-if="drawerVisible"
+			class="blame-drawer"
+			:style="{ width: drawerWidth + 'vw' }"
+		>
+			<div
+				class="drawer-splitter"
+				title="拖拽调整抽屉宽度"
+				@pointerdown="startDrawerDrag"
+			/>
+			<div class="drawer-inner">
+				<div class="drawer-head">
+					<span class="drawer-title">{{ drawerTitle }}</span>
+					<button
+						type="button"
+						class="btn btn-icon"
+						title="关闭"
+						@click="closeDrawer"
+					>
+						<Icon name="x" :size="14" />
+					</button>
+				</div>
+				<div class="drawer-body">
+					<div class="drawer-panels">
+						<!-- ==== 左侧：提交列表（始终可见） ==== -->
+						<div class="drawer-list">
+							<Spinner v-if="drawerLoading" :size="16" />
+							<div
+								v-else-if="drawerCommits.length === 0"
+								class="drawer-empty"
+							>
+								暂无历史记录
+							</div>
+							<div
+								v-for="(c, i) in drawerCommits"
+								:key="c.fullHash + i"
+								class="drawer-commit"
+								:class="{
+									'is-active':
+										drawerActiveHash === c.fullHash,
+								}"
+								@click="selectDrawerCommit(c.fullHash)"
+							>
+								<span class="dc-hash">
+									{{ c.hash }}
+								</span>
+								<span class="dc-author">
+									{{ c.author }}
+								</span>
+								<span class="dc-time">
+									{{ c.time }}
+								</span>
+								<span class="dc-subject">
+									{{ c.subject }}
+								</span>
+							</div>
+						</div>
+						<!-- ==== 右侧：选中提交的详情 ==== -->
+						<div class="drawer-detail">
+							<template v-if="!drawerActiveHash">
+								<div class="drawer-detail-empty">
+									点击左侧提交查看变更详情
+								</div>
+							</template>
+							<template v-else>
+								<Spinner v-if="drawerFilesLoading" :size="16" />
+								<template v-else-if="drawerCommitInfo">
+									<!-- 提交元数据 -->
+									<div class="drawer-meta">
+										<div class="dm-subject">
+											{{ drawerCommitInfo.subject }}
+										</div>
+										<div class="dm-info">
+											<span class="dm-author">
+												{{ drawerCommitInfo.author }}
+											</span>
+											<span class="dm-time">
+												{{
+													relativeTime(
+														drawerCommitInfo.timestamp,
+													)
+												}}
+											</span>
+											<span class="dm-hash">
+												{{
+													drawerCommitInfo.hash.slice(
+														0,
+														8,
+													)
+												}}
+											</span>
+										</div>
+										<div
+											v-if="drawerCommitInfo.body"
+											class="dm-body"
+										>
+											{{ drawerCommitInfo.body }}
+										</div>
+									</div>
+									<!-- 变更文件列表 -->
+									<div
+										v-if="drawerCommitFiles.length"
+										class="drawer-files"
+									>
+										<div
+											v-for="f in drawerCommitFiles"
+											:key="f.path"
+											class="df-item"
+											:class="{
+												'is-active':
+													drawerSelectedFile ===
+													f.path,
+											}"
+											@click="
+												selectDrawerFile(
+													drawerCommitInfo.hash,
+													f.path,
+												)
+											"
+										>
+											<span
+												class="df-status"
+												:style="{
+													color: statusColor(
+														f.binary
+															? 'B'
+															: f.status,
+													),
+												}"
+											>
+												{{ f.binary ? "B" : f.status }}
+											</span>
+											<span class="df-path">
+												{{ f.path }}
+											</span>
+											<span class="df-stats">
+												<span
+													v-if="f.additions"
+													class="df-add"
+												>
+													+{{ f.additions }}
+												</span>
+												<span
+													v-if="f.deletions"
+													class="df-del"
+												>
+													-{{ f.deletions }}
+												</span>
+												<span
+													v-if="f.binary"
+													class="df-bin"
+												>
+													bin
+												</span>
+											</span>
+										</div>
+									</div>
+									<!-- 选中文件的 diff -->
+									<div
+										v-if="drawerSelectedFile"
+										class="drawer-diff"
+									>
+										<DiffViewer
+											:raw="drawerFileDiff"
+											:loading="drawerFileDiffLoading"
+											:filename="drawerSelectedFile"
+										/>
+									</div>
+								</template>
+							</template>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</teleport>
 </template>
 
 <style scoped>
@@ -1616,5 +2240,317 @@ const sideMissingText = computed(() => {
 }
 .chip-both:hover {
 	background: var(--banner-merge-bg);
+}
+
+/* ------------------------------------------------------------------ 右键上下文菜单 */
+.ctx-menu {
+	position: fixed;
+	z-index: 1100;
+	min-width: 170px;
+	background: var(--bg-panel);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.32);
+	padding: 4px 0;
+}
+.ctx-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 7px 12px;
+	font-size: 12px;
+	color: var(--text);
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	cursor: pointer;
+	text-align: left;
+	line-height: 1.1;
+}
+.ctx-item:hover {
+	background: var(--bg-selected);
+}
+.ctx-item svg {
+	flex: none;
+	color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------ 历史记录抽屉（右侧滑入，可拖拽调整宽度） */
+.blame-drawer {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 1050;
+	background: var(--bg-panel);
+	border-left: 1px solid var(--border);
+	box-shadow: -4px 0 20px rgba(0, 0, 0, 0.25);
+	display: flex;
+	flex-direction: row;
+}
+/* 拖拽手柄：位于抽屉左缘，可交互区域扩展到抽屉外侧 */
+.drawer-splitter {
+	flex: none;
+	width: 8px;
+	cursor: col-resize;
+	background: transparent;
+	user-select: none;
+	margin-left: -6px;
+	z-index: 1;
+	position: relative;
+}
+.drawer-splitter::after {
+	content: "";
+	position: absolute;
+	left: 3px;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	background: var(--border);
+	border-radius: 1px;
+}
+.drawer-splitter:hover::after {
+	background: var(--accent);
+}
+.drawer-inner {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.drawer-head {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-app);
+	gap: 8px;
+}
+.drawer-title {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+.drawer-body {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+/* 左右分栏：左侧提交列表 + 右侧变更详情 */
+.drawer-panels {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+}
+/* 左侧：提交列表（可独立滚动） */
+.drawer-list {
+	flex: 0 0 38%;
+	overflow-y: auto;
+	border-right: 1px solid var(--border);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+.drawer-list > .spinner {
+	margin-top: 24px;
+}
+.drawer-empty {
+	font-size: 12.5px;
+	color: var(--text-dim);
+	padding: 20px;
+	margin-top: 12px;
+}
+/* 右侧：变更详情（可独立滚动） */
+.drawer-detail {
+	flex: 1 1 0%;
+	min-width: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+}
+.drawer-detail > .spinner {
+	margin-top: 24px;
+	align-self: center;
+}
+.drawer-detail-empty {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 12.5px;
+	color: var(--text-dim);
+	padding: 40px 20px;
+}
+/* 单条提交记录：可点击查看 diff */
+.drawer-commit {
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	grid-template-rows: auto auto;
+	gap: 1px 8px;
+	align-items: baseline;
+	padding: 8px 14px;
+	font-size: 12px;
+	width: 100%;
+	box-sizing: border-box;
+	cursor: pointer;
+}
+.drawer-commit:hover {
+	background: var(--bg-hover);
+}
+.drawer-commit.is-active {
+	background: var(--bg-selected);
+}
+.dc-hash {
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	color: var(--accent);
+	grid-row: 1;
+	grid-column: 1;
+}
+.dc-author {
+	color: var(--text);
+	font-size: 11px;
+	grid-row: 1;
+	grid-column: 2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.dc-time {
+	color: var(--text-dim);
+	font-size: 10px;
+	grid-row: 1;
+	grid-column: 3;
+	white-space: nowrap;
+}
+.dc-subject {
+	color: var(--text-dim);
+	font-size: 11px;
+	grid-row: 2;
+	grid-column: 1 / 4;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* 选中提交的 diff 详情区域（嵌入 DiffViewer 组件） */
+.drawer-diff {
+	flex: 1;
+	min-height: 0;
+	border-top: 1px solid var(--border);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+/* ------------------------------------------------------------------ 提交详情：元数据 */
+.drawer-meta {
+	flex: none;
+	padding: 12px 14px;
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-app);
+}
+.dm-subject {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text);
+	line-height: 1.4;
+	margin-bottom: 6px;
+}
+.dm-info {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+.dm-author {
+	font-size: 11.5px;
+	color: var(--text);
+}
+.dm-time {
+	font-size: 11px;
+	color: var(--text-dim);
+}
+.dm-hash {
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	color: var(--accent);
+}
+.dm-body {
+	margin-top: 8px;
+	font-size: 11.5px;
+	color: var(--text-dim);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	max-height: 120px;
+	overflow-y: auto;
+}
+
+/* ------------------------------------------------------------------ 变更文件列表 */
+.drawer-files {
+	flex: none;
+	max-height: 200px;
+	overflow-y: auto;
+	border-bottom: 1px solid var(--border);
+}
+.df-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 14px;
+	font-size: 11.5px;
+	cursor: pointer;
+	border-left: 3px solid transparent;
+}
+.df-item:hover {
+	background: var(--bg-hover);
+}
+.df-item.is-active {
+	background: var(--bg-selected);
+	border-left-color: var(--accent);
+}
+.df-status {
+	flex: none;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 600;
+	width: 14px;
+	text-align: center;
+}
+.df-path {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.df-stats {
+	flex: none;
+	display: flex;
+	gap: 6px;
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+}
+.df-add {
+	color: var(--green);
+}
+.df-del {
+	color: var(--red);
+}
+.df-bin {
+	color: var(--text-dim);
+	font-size: 10px;
 }
 </style>
