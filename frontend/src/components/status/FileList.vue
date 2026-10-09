@@ -184,14 +184,54 @@ const someStaged = computed(() => rows.value.some((r) => r.staged));
 function toggleAll() {
 	if (ui.opRunning) return;
 	if (allStaged.value) {
-		// 取消全选：仅对已完全暂存的文件取消暂存
-		const staged = rows.value.filter((r) => r.staged).map((r) => r.path);
-		if (staged.length) repo.unstagePaths([...new Set(staged)]);
+		// 取消全选：使用无路径参数的 git reset -q，大量文件时远快于逐个传路径
+		repo.unstageAll();
 	} else {
-		// 全选：所有文件都纳入提交（部分暂存的补齐剩余改动）
-		const paths = [...new Set(rows.value.map((r) => r.path))];
-		if (paths.length) repo.stagePaths(paths);
+		// 全选：使用无路径参数的 git add -A，大量文件时远快于逐个传路径
+		repo.stageAll();
 	}
+}
+
+async function discardSelected() {
+	if (ui.opRunning) return;
+	const chosen = rows.value.filter((r) => r.staged).map((r) => r.path);
+	if (chosen.length === 0) return;
+	const summary =
+		chosen.slice(0, 5).join("\n") +
+		(chosen.length > 5 ? "\n…等共 " + chosen.length + " 个文件" : "");
+	const ok = await ui.confirm({
+		title: "丢弃已选更改",
+		message:
+			"确定丢弃 " +
+			chosen.length +
+			" 个已勾选文件的更改吗？\n" +
+			summary +
+			"\n\n此操作不可恢复。",
+		confirmLabel: "丢弃",
+		danger: true,
+	});
+	if (ok) await repo.discardPaths([...new Set(chosen)]);
+}
+
+async function discardAll() {
+	if (ui.opRunning) return;
+	const paths = [...new Set(rows.value.map((r) => r.path))];
+	if (paths.length === 0) return;
+	const summary =
+		paths.slice(0, 5).join("\n") +
+		(paths.length > 5 ? "\n…等共 " + paths.length + " 个文件" : "");
+	const ok = await ui.confirm({
+		title: "丢弃全部更改",
+		message:
+			"确定丢弃全部 " +
+			paths.length +
+			" 个文件的更改吗？\n" +
+			summary +
+			"\n\n此操作不可恢复。",
+		confirmLabel: "全部丢弃",
+		danger: true,
+	});
+	if (ok) await repo.discardPaths(paths);
 }
 
 function fileMenu(e: MouseEvent, f: Row) {
@@ -225,6 +265,21 @@ function fileMenu(e: MouseEvent, f: Row) {
 				});
 				if (ok) await repo.discardPaths([f.path]);
 			},
+		},
+		{ separator: true },
+		{
+			label: "丢弃已勾选的文件",
+			icon: "trash",
+			danger: true,
+			disabled: !someStaged.value,
+			action: () => discardSelected(),
+		},
+		{
+			label: "丢弃全部文件",
+			icon: "trash",
+			danger: true,
+			disabled: rows.value.length === 0,
+			action: () => discardAll(),
 		},
 	];
 	ui.openMenu(e.clientX, e.clientY, items);
