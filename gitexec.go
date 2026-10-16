@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -52,8 +53,11 @@ func ownGitActivity() bool {
 
 // gitEnv is appended to every git invocation so output is stable and git never
 // blocks on interactive prompts (credentials, editors, pagers).
+// It also extends PATH with common Node.js tool directories so that git hooks
+// (husky, lint-staged, etc.) can find yarn / npm / npx even when the macOS
+// app is launched from Finder/Dock with a minimal PATH.
 func gitEnv() []string {
-	return append(os.Environ(),
+	env := append(os.Environ(),
 		"LC_ALL=C",              // stable, English output
 		"GIT_PAGER=cat",         // never paginate
 		"PAGER=cat",             // never paginate
@@ -61,6 +65,79 @@ func gitEnv() []string {
 		"EDITOR=true",           // never open an interactive editor
 		"GIT_TERMINAL_PROMPT=0", // fail instead of prompting for credentials
 	)
+	return extendPathForNodeTools(env)
+}
+
+// extendPathForNodeTools appends common Node.js tool installation paths to the
+// PATH entry in env so that git hooks can find yarn/npm/npx. Only paths that
+// actually exist on the filesystem are added.
+func extendPathForNodeTools(env []string) []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return env
+	}
+
+	var extra []string
+
+	// Homebrew (Intel & Apple Silicon)
+	extra = appendIfExists(extra, "/usr/local/bin")
+	extra = appendIfExists(extra, "/opt/homebrew/bin")
+
+	// nvm: try the default alias → ~/.nvm/versions/node/<version>/bin
+	if nvmBin := resolveNvmBin(home); nvmBin != "" {
+		extra = append(extra, nvmBin)
+	}
+
+	// fnm: ~/.local/share/fnm/aliases/default/bin
+	extra = appendIfExists(extra, filepath.Join(home, ".local/share/fnm/aliases/default/bin"))
+
+	// Volta: ~/.volta/bin
+	extra = appendIfExists(extra, filepath.Join(home, ".volta/bin"))
+
+	// pnpm global bin (Homebrew or pnpm env)
+	extra = appendIfExists(extra, filepath.Join(home, "Library/pnpm"))
+
+	if len(extra) == 0 {
+		return env
+	}
+
+	suffix := strings.Join(extra, ":")
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			env[i] = e + ":" + suffix
+			return env
+		}
+	}
+	// PATH not found in env (should not happen), add it
+	return append(env, "PATH="+suffix)
+}
+
+// appendIfExists appends path to dst only if it is an existing directory.
+func appendIfExists(dst []string, path string) []string {
+	info, err := os.Stat(path)
+	if err == nil && info.IsDir() {
+		return append(dst, path)
+	}
+	return dst
+}
+
+// resolveNvmBin resolves the default nvm Node.js bin directory.
+func resolveNvmBin(home string) string {
+	aliasFile := filepath.Join(home, ".nvm/alias/default")
+	data, err := os.ReadFile(aliasFile)
+	if err != nil {
+		return ""
+	}
+	version := strings.TrimSpace(string(data))
+	if version == "" {
+		return ""
+	}
+	binPath := filepath.Join(home, ".nvm/versions/node", version, "bin")
+	info, err := os.Stat(binPath)
+	if err == nil && info.IsDir() {
+		return binPath
+	}
+	return ""
 }
 
 // runGit executes a git command in repoPath and returns its stdout.
