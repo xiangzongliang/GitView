@@ -257,19 +257,19 @@ wails3 task package
 # MSIX 格式：wails3 task package FORMAT=msix
 
 # 3.（可选）打 zip，命名规则：GitView_<版本>_windows_amd64[_installer].zip
-Compress-Archive -Path "bin\GitView.exe" `
+Compress-Archive -Path "bin\Git View.exe" `
 	-DestinationPath "bin\GitView_0.1.12_windows_amd64.zip" -Force
-Compress-Archive -Path "build\windows\nsis\Git View-installer.exe" `
+Compress-Archive -Path "bin\gitView-amd64-installer.exe" `
 	-DestinationPath "bin\GitView_0.1.12_windows_amd64_installer.zip" -Force
 ```
 
 产物位置：
 
-| 命令                   | 产物                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| `wails3 task build`    | `bin/GitView.exe`（绿色版，单文件可运行）                                                   |
-| `wails3 task package`  | `build/windows/nsis/Git View-installer.exe`（**首次安装与升级均用它，上传该文件到更新源**） |
-| `Compress-Archive ...` | `bin/GitView_<版本>_windows_amd64[_installer].zip`                                          |
+| 命令                   | 产物                                                                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `wails3 task build`    | `bin/Git View.exe`（绿色版，单文件可运行，注意文件名带空格）                                                                     |
+| `wails3 task package`  | `bin/gitView-amd64-installer.exe`（**首次安装与升级均用它，上传该文件到更新源**；产物在 `bin/`，由 project.nsi 的 OutFile 决定） |
+| `Compress-Archive ...` | `bin/GitView_<版本>_windows_amd64[_installer].zip`                                                                               |
 
 发布新版本前先同步版本号（`appservice.go` 的 `appVersion` 与 `build/config.yml`
 的 `info.version`，见 4.8）。老用户在「设置 → 关于」检查更新后，由内置 updater
