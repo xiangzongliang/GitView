@@ -157,6 +157,30 @@ updateManifestPath = "/api/v1/gitview/updates/manifest"
 >
 > 两个 plist 是由 `build/config.yml` 生成的资产：改完 `config.yml` 后执行 `wails3 task common:update:build-assets` 会重新生成它们（会覆盖手工改动）。
 
+**更新应用图标**：替换 `build/appicon.png`（建议 1024×1024 PNG）后，重新生成平台图标并构建：
+
+```bash
+# 1. 生成 macOS / Windows 图标
+wails3 task common:generate:icons
+
+# 2. 清理旧产物并重新构建 + 打包
+rm -rf "bin/Git View.app" "bin/Git View.dev.app" "bin/Git View"
+wails3 build
+wails3 task package
+```
+
+> 构建流程中 `common:generate:icons` 会自动执行，但如仅更换图标无需重新编译前端，单独执行 `generate:icons` + `build` + `package` 更快。
+>
+> macOS 会缓存应用图标，更新 `.app` 后若图标未刷新，执行以下命令清除缓存：
+>
+> ```bash
+> touch "bin/Git View.app"
+> killall Dock
+> killall Finder
+> ```
+>
+> 或者右键 `.app` →「显示简介」，选中左上角图标按 Delete 手动刷新。
+
 ### 4.2 常用命令
 
 ```bash

@@ -75,8 +75,8 @@ export function buildCommitUserPrompt(ctx: CommitContext): string {
 
 // ------------------------------------------------------------- 合并信息生成
 
-/** 合并信息生成：系统提示词（把多个待合并提交归纳成一句合并说明）。 */
-export const MERGE_SUMMARY_SYSTEM_PROMPT = [
+/** 合并信息生成：系统提示词的基础部分。 */
+const MERGE_SUMMARY_BASE = [
 	"你是一名严谨的工程师，负责为 Git 分支合并撰写合并提交信息（merge commit message）。",
 	"",
 	"要求：",
@@ -88,7 +88,24 @@ export const MERGE_SUMMARY_SYSTEM_PROMPT = [
 	"   确实有 2～3 个并列主题时用顿号连接，仍保持一句话。",
 	"5. 使用与提交记录一致的语言；无法判断时默认使用中文。",
 	"6. 不要编造提交记录中不存在的内容。",
-].join("\n");
+];
+
+/** 合并信息生成：系统提示词（不带前缀的基础版本）。 */
+export const MERGE_SUMMARY_SYSTEM_PROMPT = MERGE_SUMMARY_BASE.join("\n");
+
+/**
+ * 按项目配置的前缀生成合并信息系统提示词。
+ * 配了前缀时明确告诉模型不要再自带类型前缀。
+ */
+export function buildMergeSystemPrompt(prefix: string): string {
+	if (!prefix) return MERGE_SUMMARY_SYSTEM_PROMPT;
+	return [
+		...MERGE_SUMMARY_BASE,
+		"",
+		`注意：合并信息将由系统统一添加前缀「${prefix}」，`,
+		"因此你**不要**再输出任何类型前缀（如 feat: / fix: / AI：），直接写正文即可。",
+	].join("\n");
+}
 
 /** 合并信息生成所需的上下文。 */
 export interface MergeSummaryContext {

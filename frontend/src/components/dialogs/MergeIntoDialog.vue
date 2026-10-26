@@ -7,7 +7,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useAi } from "../../stores/ai";
-import { GitService, errMsg } from "../../api";
+import { GitService, RepoService, errMsg } from "../../api";
 import type { Commit, GitStepResult } from "../../api";
 import {
 	availableAiModels,
@@ -15,9 +15,10 @@ import {
 	encodeModelValue,
 } from "../../ai/models";
 import {
-	MERGE_SUMMARY_SYSTEM_PROMPT,
+	buildMergeSystemPrompt,
 	buildMergeSummaryUserPrompt,
 } from "../../ai/prompts";
+import { applyCommitPrefix } from "../../ai/commitPrefix";
 import { startChat, type ChatSession } from "../../ai/chat";
 import ModalDialog from "../ui/ModalDialog.vue";
 import Icon from "../ui/Icon.vue";
@@ -257,7 +258,21 @@ async function syncAndRefresh(B: string) {
 	await syncTargetBranch(B);
 	await Promise.all([refreshMergeCommits(), refreshDiff()]);
 }
-void syncAndRefresh(target.value);
+	void syncAndRefresh(target.value);
+
+	// 提交信息前缀：与文件状态页共享同一份项目配置。
+	const DEFAULT_COMMIT_PREFIX = "AI：";
+	const commitPrefix = ref(DEFAULT_COMMIT_PREFIX);
+	async function loadCommitPrefix() {
+		if (!repo.path) return;
+		try {
+			const saved = await RepoService.GetAiCommitPrefix(repo.path);
+			commitPrefix.value = saved == null ? DEFAULT_COMMIT_PREFIX : saved;
+		} catch {
+			/* ignore */
+		}
+	}
+	void loadCommitPrefix();
 
 // AI 模型选择：与提交信息生成一致，记住上次选择、失效时回退到第一个可用模型。
 const AI_MODEL_KEY = "gv.aiMergeModel";
@@ -285,9 +300,13 @@ watch(
 );
 const hasAiModel = computed(() => availableAiModels(ai.providers).length > 0);
 
-const aiBusy = ref(false);
-const aiError = ref("");
-let chat: ChatSession | null = null;
+	const aiBusy = ref(false);
+	const aiError = ref("");
+	/** AI 归纳时的思考过程文本。 */
+	const aiReasoning = ref("");
+	/** 思考过程是否展开。 */
+	const showReasoning = ref(false);
+	let chat: ChatSession | null = null;
 
 /** 去掉模型偶尔多输出的围栏/引号，并压成单行。 */
 function cleanSummary(text: string): string {
@@ -331,12 +350,14 @@ async function aiGenerate() {
 		}
 		aiBusy.value = true;
 		message.value = "";
+		aiReasoning.value = "";
+		showReasoning.value = true;
 		msgEdited.value = true;
 		chat = await startChat(
 			{
 				providerId,
 				model,
-				system: MERGE_SUMMARY_SYSTEM_PROMPT,
+				system: buildMergeSystemPrompt(commitPrefix.value),
 				user: buildMergeSummaryUserPrompt({
 					sourceBranch: source.value,
 					targetBranch: target.value,
@@ -348,11 +369,14 @@ async function aiGenerate() {
 				}),
 			},
 			{
+				onReasoning: (t) => {
+					aiReasoning.value += t;
+				},
 				onChunk: (t) => {
 					message.value += t;
 				},
 				onDone: (content) => {
-					message.value = cleanSummary(content);
+					message.value = applyCommitPrefix(cleanSummary(content), commitPrefix.value);
 					aiBusy.value = false;
 					chat = null;
 				},
@@ -838,6 +862,19 @@ function attemptClose() {
 						{{ aiBusy ? "停止生成" : "AI 归纳生成" }}
 					</button>
 				</div>
+				<!-- AI 思考过程 -->
+				<div v-if="aiReasoning" class="reasoning-block">
+					<button class="reasoning-head" @click="showReasoning = !showReasoning">
+						<Icon
+							:name="showReasoning ? 'chevron-down' : 'chevron-right'"
+							:size="11"
+						/>
+						<Spinner v-if="aiBusy" :size="10" />
+						<Icon v-else name="sparkles" :size="10" />
+						<span>思考过程</span>
+					</button>
+					<pre v-if="showReasoning" class="reasoning-body">{{ aiReasoning }}</pre>
+				</div>
 				<div v-if="aiError" class="hint err">{{ aiError }}</div>
 			</div>
 
@@ -1075,6 +1112,39 @@ function attemptClose() {
 .ai-model {
 	flex: 1;
 	min-width: 0;
+}
+/* AI 思考过程展示 */
+.reasoning-block {
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: var(--bg-panel-2);
+	overflow: hidden;
+}
+.reasoning-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 5px 8px;
+	font-size: 11px;
+	color: var(--text-dim);
+	text-align: left;
+}
+.reasoning-head:hover {
+	background: var(--bg-hover);
+	color: var(--text-strong);
+}
+.reasoning-body {
+	margin: 0;
+	padding: 0 10px 8px;
+	font-family: inherit;
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--text-dim);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 150px;
+	overflow-y: auto;
 }
 .check {
 	display: flex;

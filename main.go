@@ -38,7 +38,7 @@ func main() {
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:  "Git View",
 		Width:  1400,
-		Height: 900,
+		Height: 920,
 		Mac: application.MacWindow{
 			// 顶部 24pt 为原生窗口拖拽区（该区域内不放交互控件）
 			InvisibleTitleBarHeight: 24,
