@@ -83,12 +83,12 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
-   # 升级覆盖安装时，正在运行的实例会锁定 gitView.exe，导致
-   # "Error opening file for writing"；先结束运行中的实例再继续。
-   # 没有运行中的实例时 taskkill 返回非零，直接忽略即可。
+   # A running instance locks gitView.exe and breaks overwrite installs with
+   # "Error opening file for writing"; kill it first. taskkill returns non-zero
+   # when no instance is running, which is fine.
    nsExec::Exec 'taskkill /im "${PRODUCT_EXECUTABLE}" /f'
    Pop $0
-   Sleep 800 # 等待进程退出、文件句柄释放
+   Sleep 800 # let the process exit and release file handles
 FunctionEnd
 
 Section
@@ -108,9 +108,9 @@ Section
 
     !insertmacro wails.writeUninstaller
 
-    # 应用内置 updater 用 /S 静默调起本安装包且会自行退出，
-    # 装完后由这里拉起新版本（通过 explorer 启动以避免继承安装器的管理员权限）；
-    # 手动交互安装则由用户自己启动。
+    # The in-app updater invokes this installer with /S while the app quits,
+    # so relaunch the fresh build here (via explorer to avoid inheriting the
+    # installer's admin token). Interactive installs are launched by the user.
     ${If} ${Silent}
         Exec '"$WINDIR\explorer.exe" "$INSTDIR\${PRODUCT_EXECUTABLE}"'
     ${EndIf}
