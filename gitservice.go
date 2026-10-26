@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1508,6 +1509,30 @@ func (s *GitService) RunGitStep(repoPath string, args []string, network bool) (*
 // terminal command so `cd` can persist across invocations.
 const cmdPwdMarker = "__GV_PWD__"
 
+// buildShellInvocation returns the shell invocation used by the built-in
+// terminal on the current platform. The returned script runs command, then
+// reports the shell's final working directory via cmdPwdMarker (captured and
+// stripped by RunCommand) and preserves the command's exit status.
+// POSIX systems use /bin/sh; Windows uses Windows PowerShell, which ships
+// with the OS and accepts both unix-style (`ls`) and cmd-style (`dir`)
+// command names.
+func buildShellInvocation(command string) (string, []string) {
+	if runtime.GOOS == "windows" {
+		// Force UTF-8 so native command output (e.g. git) is decoded and
+		// re-emitted correctly regardless of the console codepage; emit the
+		// PWD marker on its own line (like the POSIX printf variant).
+		script := "[Console]::OutputEncoding=[Text.Encoding]::UTF8;$OutputEncoding=[Text.Encoding]::UTF8;" +
+			command + "\n" +
+			"$__gv_ec=$LASTEXITCODE;" +
+			"$__gv_pwd=(Get-Location).Path;" +
+			"Write-Output (\"`n" + cmdPwdMarker + "$__gv_pwd\");" +
+			"exit $__gv_ec"
+		return "powershell", []string{"-NoProfile", "-NonInteractive", "-Command", script}
+	}
+	script := command + "\n__gv_ec=$?; printf '\\n" + cmdPwdMarker + "%s\\n' \"$PWD\"; exit $__gv_ec"
+	return "/bin/sh", []string{"-c", script}
+}
+
 // RunCommand executes an arbitrary shell command for the built-in terminal.
 // cwd is the directory the command starts in ("" = repoPath). The final
 // working directory is reported back so the UI can keep `cd` state.
@@ -1532,10 +1557,10 @@ func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*C
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Append a marker line reporting the shell's final PWD (captured &
-	// stripped below) so subsequent commands can continue from there.
-	script := command + "\n__gv_ec=$?; printf '\\n" + cmdPwdMarker + "%s\\n' \"$PWD\"; exit $__gv_ec"
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", script)
+	// The shell wrapper reports the final PWD (captured & stripped below)
+	// so subsequent commands can continue from there.
+	name, args := buildShellInvocation(command)
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"LC_ALL=en_US.UTF-8",
@@ -1561,13 +1586,16 @@ func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*C
 	runErr := cmd.Run()
 
 	out := buf.String()
+	// Windows shells emit CRLF; normalize it so the PWD marker (and the
+	// displayed output) carry no stray carriage returns.
+	out = strings.ReplaceAll(out, "\r\n", "\n")
 
 	// Extract and strip the PWD marker line.
 	lines := strings.Split(out, "\n")
 	kept := make([]string, 0, len(lines))
 	for _, ln := range lines {
 		if strings.HasPrefix(ln, cmdPwdMarker) {
-			res.NewCwd = strings.TrimPrefix(ln, cmdPwdMarker)
+			res.NewCwd = filepath.Clean(strings.TrimPrefix(ln, cmdPwdMarker))
 			continue
 		}
 		kept = append(kept, ln)

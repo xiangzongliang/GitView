@@ -121,7 +121,14 @@ const GIT_SUBCOMMANDS = [
 	"worktree",
 ];
 
+// 终端命令在 Windows 上跑在 PowerShell 里，引号转义与列表命令都和 POSIX 不同
+const IS_WIN = navigator.userAgent.includes("Windows");
+
 function shellQuote(s: string): string {
+	if (IS_WIN) {
+		// PowerShell 单引号字符串内用连续两个单引号转义
+		return "'" + s.replace(/'/g, "''") + "'";
+	}
 	return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
@@ -135,16 +142,20 @@ function commonPrefix(items: string[]): string {
 	return p;
 }
 
-/** 列出目录内容（ls -1F 会给目录加 "/"、可执行文件加 "*"），供路径补全用。 */
+/** 列出目录内容（目录名带 "/" 后缀），供路径补全用。 */
 async function pathCandidates(token: string): Promise<string[]> {
 	const slash = Math.max(token.lastIndexOf("/"), token.lastIndexOf("\\"));
 	const dir = slash >= 0 ? token.slice(0, slash) || "/" : "";
 	const base = slash >= 0 ? token.slice(slash + 1) : token;
+	// PowerShell 的 ls 是 Get-ChildItem 别名，不支持 -1AF 参数
+	const listCmd = IS_WIN
+		? `Get-ChildItem -Force ${shellQuote(dir || ".")} | ForEach-Object { $_.Name + $(if ($_.PSIsContainer) { '/' } else { '' }) }`
+		: "ls -1AF " + shellQuote(dir || ".");
 	try {
 		const res = await GitService.RunCommand(
 			repo.path,
 			cwd.value,
-			"ls -1AF " + shellQuote(dir || "."),
+			listCmd,
 		);
 		if (!res || res.exitCode !== 0) return [];
 		return (res.output || "")
@@ -173,7 +184,8 @@ async function tabComplete() {
 	} else if (
 		words[0] === "git" &&
 		words.length === 1 &&
-		!token.includes("/")
+		!token.includes("/") &&
+		!token.includes("\\")
 	) {
 		candidates = GIT_SUBCOMMANDS.filter((c) => c.startsWith(token));
 	} else {
@@ -217,7 +229,8 @@ function push(kind: TermLine["kind"], text: string) {
 function prompt(): string {
 	const p = cwd.value || repo.path;
 	if (!p) return "";
-	const i = p.lastIndexOf("/");
+	// Windows paths use backslashes; take the tail after either separator.
+	const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
 	return i >= 0 && i < p.length - 1 ? p.slice(i + 1) : p;
 }
 
