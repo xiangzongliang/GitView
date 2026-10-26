@@ -153,7 +153,7 @@ updateManifestPath = "/api/v1/gitview/updates/manifest"
 - `build/darwin/Info.dev.plist` → 同上
 - `appservice.go` → `appVersion` 默认值
 
-> 上述四处当前已统一为 `0.1.12`。发布前请确保它们一致，否则「关于」页显示的版本会与安装包 / 更新清单对不上。
+> 上述四处当前已统一为 `0.1.13`。发布前请确保它们一致，否则「关于」页显示的版本会与安装包 / 更新清单对不上。
 >
 > 两个 plist 是由 `build/config.yml` 生成的资产：改完 `config.yml` 后执行 `wails3 task common:update:build-assets` 会重新生成它们（会覆盖手工改动）。
 
@@ -224,7 +224,7 @@ wails3 build
 wails3 task package
 
 # 3. 打成发布 zip（替换为实际版本号，命名规则：GitView_<版本>_darwin_arm64.zip）
-ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.1.12_darwin_arm64.zip"
+ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.1.13_darwin_arm64.zip"
 ```
 
 产物位置：
@@ -233,7 +233,7 @@ ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.
 | --------------------------------------------------- | ----------------------------------------------------------- |
 | `wails3 build`                                      | `bin/Git View` 可执行文件                                   |
 | `wails3 task package`                               | `bin/Git View.app`                                          |
-| `ditto -c -k --norsrc --noextattr --keepParent ...` | `bin/GitView_0.1.12_darwin_arm64.zip`（上传该文件到更新源） |
+| `ditto -c -k --norsrc --noextattr --keepParent ...` | `bin/GitView_0.1.13_darwin_arm64.zip`（上传该文件到更新源） |
 
 如需生成 **`.dmg` 安装镜像**（仅本地分发，不走更新服务器上传）：
 
@@ -258,9 +258,9 @@ wails3 task package
 
 # 3.（可选）打 zip，命名规则：GitView_<版本>_windows_amd64[_installer].zip
 Compress-Archive -Path "bin\Git View.exe" `
-	-DestinationPath "bin\GitView_0.1.12_windows_amd64.zip" -Force
+	-DestinationPath "bin\GitView_0.1.13_windows_amd64.zip" -Force
 Compress-Archive -Path "bin\gitView-amd64-installer.exe" `
-	-DestinationPath "bin\GitView_0.1.12_windows_amd64_installer.zip" -Force
+	-DestinationPath "bin\GitView_0.1.13_windows_amd64_installer.zip" -Force
 ```
 
 产物位置：
@@ -271,10 +271,37 @@ Compress-Archive -Path "bin\gitView-amd64-installer.exe" `
 | `wails3 task package`  | `bin/gitView-amd64-installer.exe`（**首次安装与升级均用它，上传该文件到更新源**；产物在 `bin/`，由 project.nsi 的 OutFile 决定） |
 | `Compress-Archive ...` | `bin/GitView_<版本>_windows_amd64[_installer].zip`                                                                               |
 
-发布新版本前先同步版本号（`appservice.go` 的 `appVersion` 与 `build/config.yml`
-的 `info.version`，见 4.8）。老用户在「设置 → 关于」检查更新后，由内置 updater
-下载新安装包静默安装并重启，完成自动升级；首次发 Windows 升级包时建议实际
-走一遍「检查更新 → 升级 → 重启」验证静默安装闭环。
+发布新版本前先同步版本号（`appservice.go` 的 `appVersion`、`build/config.yml`
+的 `info.version`、`build/windows/nsis/wails_tools.nsh` 的
+`INFO_PRODUCTVERSION`，见 4.8）。老用户在「设置 → 关于」检查更新后，由内置
+updater 下载新安装包静默安装并重启，完成自动升级；首次发 Windows 升级包时
+建议实际走一遍「检查更新 → 升级 → 重启」验证静默安装闭环。
+
+#### Windows 打包注意事项
+
+- **NSIS 是硬依赖**：`wails3 task package` 调用 `makensis` 编译
+  `build/windows/nsis/project.nsi`，未安装时任务会在生成 WebView2
+  bootstrapper 后中断，`bin/` 里不会出现安装包（极易误以为已成功）。
+  安装：官网 https://nsis.sourceforge.io/Download 下载 setup.exe；老系统没有
+  `winget` 时只能手动装。装完若 `where.exe makensis` 找不到，把
+  `C:\Program Files (x86)\NSIS` 加入 PATH（`$env:PATH` 只对当前会话生效）。
+- **安装包产物路径以实际为准**：project.nsi 的 `OutFile` 是
+  `..\..\..\bin\<项目名>-<架构>-installer.exe`，即落在 `bin/` 而不是
+  `build/windows/nsis/`；打 zip 前先用 `dir bin\*installer*.exe` 确认实际文件名。
+- **`wails_tools.nsh` 是手工维护的**：该文件标注由 `wails build` 自动生成，
+  但本项目打包走 Taskfile（`go build`），不会重新生成它，其中的
+  `INFO_PRODUCTNAME` / `INFO_PRODUCTVERSION` 等需要随版本手动同步；若被人跑过
+  `wails build` 会被重置为模板默认值（My Product / 0.1.1），打包后应检查安装向导
+  显示的应用名与版本。
+- **升级时旧实例会锁定 exe**：覆盖安装 `gitView.exe` 时若应用还在运行，
+  NSIS 会报 `Error opening file for writing`（静默升级时也会弹这个框）。
+  project.nsi 已在 `.onInit` 里 `taskkill` 运行中的实例并等待句柄释放，
+  并在静默升级（updater 的 /S 调用）装完后通过 explorer 自动拉起新版本
+  （避免继承安装器的管理员权限）；改动 NSIS 脚本后需重新 `wails3 task package`
+  并重新上传。
+- **绿色版 zip 只用于手动分发**：应用内 updater 只认安装包 artifact；且绿色版
+  没有安装位置/卸载信息，用户若先用绿色版再点自动升级，会在 Program Files
+  下多出一份副本。**统一用安装包做首次分发**，保证升级闭环一致。
 
 ### 4.6 macOS zip 打包要点
 
@@ -290,7 +317,7 @@ Compress-Archive -Path "bin\gitView-amd64-installer.exe" `
 打包后可自行验证 zip 顶层只有一个条目：
 
 ```bash
-unzip -l "bin/GitView_0.1.12_darwin_arm64.zip" | head
+unzip -l "bin/GitView_0.1.13_darwin_arm64.zip" | head
 ```
 
 ### 4.7 各平台打包产物

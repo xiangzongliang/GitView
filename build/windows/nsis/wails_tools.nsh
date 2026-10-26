@@ -14,7 +14,7 @@
     !define INFO_PRODUCTNAME "Git View"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "0.1.12"
+    !define INFO_PRODUCTVERSION "0.1.13"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "© 2026, GitView"
