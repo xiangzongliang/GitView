@@ -34,7 +34,6 @@ Unicode true
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"
-!include "LogicLib.nsh"
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -108,12 +107,12 @@ Section
 
     !insertmacro wails.writeUninstaller
 
-    # The in-app updater invokes this installer with /S while the app quits,
-    # so relaunch the fresh build here (via explorer to avoid inheriting the
-    # installer's admin token). Interactive installs are launched by the user.
-    ${If} ${Silent}
-        Exec '"$WINDIR\explorer.exe" "$INSTDIR\${PRODUCT_EXECUTABLE}"'
-    ${EndIf}
+    # Restart the app after installation (silent updater installs and
+    # interactive ones alike). The in-app updater kills/lets the app exit
+    # before installing, so the installer is the only thing that can bring
+    # it back. Launch via explorer.exe so the app does not inherit the
+    # installer's admin token.
+    Exec '"$WINDIR\explorer.exe" "$INSTDIR\${PRODUCT_EXECUTABLE}"'
 SectionEnd
 
 Section "uninstall"

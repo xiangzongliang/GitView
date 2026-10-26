@@ -153,7 +153,7 @@ updateManifestPath = "/api/v1/gitview/updates/manifest"
 - `build/darwin/Info.dev.plist` → 同上
 - `appservice.go` → `appVersion` 默认值
 
-> 上述四处当前已统一为 `0.1.14`。发布前请确保它们一致，否则「关于」页显示的版本会与安装包 / 更新清单对不上。
+> 上述四处当前已统一为 `0.1.16`。发布前请确保它们一致，否则「关于」页显示的版本会与安装包 / 更新清单对不上。
 >
 > 两个 plist 是由 `build/config.yml` 生成的资产：改完 `config.yml` 后执行 `wails3 task common:update:build-assets` 会重新生成它们（会覆盖手工改动）。
 
@@ -224,7 +224,7 @@ wails3 build
 wails3 task package
 
 # 3. 打成发布 zip（替换为实际版本号，命名规则：GitView_<版本>_darwin_arm64.zip）
-ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.1.14_darwin_arm64.zip"
+ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.1.16_darwin_arm64.zip"
 ```
 
 产物位置：
@@ -233,7 +233,7 @@ ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.
 | --------------------------------------------------- | ----------------------------------------------------------- |
 | `wails3 build`                                      | `bin/Git View` 可执行文件                                   |
 | `wails3 task package`                               | `bin/Git View.app`                                          |
-| `ditto -c -k --norsrc --noextattr --keepParent ...` | `bin/GitView_0.1.14_darwin_arm64.zip`（上传该文件到更新源） |
+| `ditto -c -k --norsrc --noextattr --keepParent ...` | `bin/GitView_0.1.16_darwin_arm64.zip`（上传该文件到更新源） |
 
 如需生成 **`.dmg` 安装镜像**（仅本地分发，不走更新服务器上传）：
 
@@ -258,9 +258,9 @@ wails3 task package
 
 # 3.（可选）打 zip，命名规则：GitView_<版本>_windows_amd64[_installer].zip
 Compress-Archive -Path "bin\Git View.exe" `
-	-DestinationPath "bin\GitView_0.1.14_windows_amd64.zip" -Force
+	-DestinationPath "bin\GitView_0.1.16_windows_amd64.zip" -Force
 Compress-Archive -Path "bin\gitView-amd64-installer.exe" `
-	-DestinationPath "bin\GitView_0.1.14_windows_amd64_installer.zip" -Force
+	-DestinationPath "bin\GitView_0.1.16_windows_amd64_installer.zip" -Force
 ```
 
 产物位置：
@@ -296,9 +296,41 @@ updater 下载新安装包静默安装并重启，完成自动升级；首次发
 - **升级时旧实例会锁定 exe**：覆盖安装 `gitView.exe` 时若应用还在运行，
   NSIS 会报 `Error opening file for writing`（静默升级时也会弹这个框）。
   project.nsi 已在 `.onInit` 里 `taskkill` 运行中的实例并等待句柄释放，
-  并在静默升级（updater 的 /S 调用）装完后通过 explorer 自动拉起新版本
+  并在安装完成（不论静默还是交互）后通过 explorer 自动拉起新版本
   （避免继承安装器的管理员权限）；改动 NSIS 脚本后需重新 `wails3 task package`
   并重新上传。
+- **应用侧重启守护**：点「重启并更新」时，`UpdateService.Restart` 会先派一个
+  隐藏的 cmd 助手（`ping` 延时 30 秒 + `tasklist` 检测），若 30 秒后没有
+  `gitView.exe` 在运行就兜底启动当前 exe。即使 updater 没执行安装器、或安装器
+  没拉起应用，应用也不会“消失”；已有实例时不会重复开窗。
+- **Windows 升级支持 zip / tar.gz / tgz 自解包**：更新源只接受这三种归档格式，
+  而 Wails 内置 updater 在 Windows 上只会直接执行产物，因此应用会自己完成：
+  带 `platform/arch/version` 请求清单 → 从 JSON 中解析下载地址 → 下载 → 解包 →
+  提取其中的 `.exe`。建议归档里放 **NSIS 安装包本体**（文件名含 `installer`），
+  应用会静默运行它（保留卸载信息、快捷方式维护）；若归档里只有应用 exe，
+  则退化为自我替换（机器级安装到 Program Files 时需管理员权限，可能失败，
+  失败会恢复旧文件并拉起旧版，不会把应用弄丢）。下载过程复用
+  `wails:updater:download-started / download-progress` 事件（200ms 限流），
+  设置页进度条能正常显示百分比。
+- **更新源产物格式（Windows）**：上传 `GitView_<版本>_windows_amd64_installer.zip`
+  （内含 `gitView-amd64-installer.exe`）即可；版本号必须与清单一致且大于
+  已安装版本，否则客户端不会提示升级。上传后建议 `curl` 看一次清单 JSON，
+  确认能解析出下载地址（解析失败会写进 update.log）。
+- **升级过程有日志可查**：`%APPDATA%\GitView\update.log` 记录应用启动、
+  检查/下载/安装/重启各阶段（生产版 `-H windowsgui` 无控制台，看不到 stdout）。
+  升级后应用打不开时先看这份日志：有新的「应用启动」行 = exe 能执行，问题在后续
+  初始化；没有新行 = exe 本身无法执行（文件损坏/被拦截），直接重装。
+- **升级会弹 UAC**：机器级安装（Program Files）的安装包需要管理员权限，
+  静默升级时也会弹「是否允许此应用对你的设备进行更改」。用户没点「是」就会
+  什么都不发生（应用由重启守护拉回旧版）。如不希望弹窗，可用
+  `wails3 task package INSTALL_SCOPE=user` 发布用户级安装包（装到
+  `%LOCALAPPDATA%\Programs`，无需管理员），但已装机器级的用户需手动重装一次。
+- **版本号三方必须对齐**：更新清单里的版本、安装包内的 `appVersion`、
+  上传的产物必须一致，且新版本必须**大于已安装版本**，否则客户端要么永远
+  不提示升级，要么「装完还是旧版」循环。升完版本号记得重新 `wails3 task package`。
+- **应用会自解包 Windows 产物**：`DownloadAndInstall` 遇到 zip/tar.gz/tgz
+  会自己下载解包并暂存其中的 exe；平台不支持或找不到 exe 时会返回可读错误
+  （设置页会弹提示），不会再出现「点重启后应用关闭、看似升级但版本没变」。
 - **绿色版 zip 只用于手动分发**：应用内 updater 只认安装包 artifact；且绿色版
   没有安装位置/卸载信息，用户若先用绿色版再点自动升级，会在 Program Files
   下多出一份副本。**统一用安装包做首次分发**，保证升级闭环一致。
@@ -317,7 +349,7 @@ updater 下载新安装包静默安装并重启，完成自动升级；首次发
 打包后可自行验证 zip 顶层只有一个条目：
 
 ```bash
-unzip -l "bin/GitView_0.1.14_darwin_arm64.zip" | head
+unzip -l "bin/GitView_0.1.16_darwin_arm64.zip" | head
 ```
 
 ### 4.7 各平台打包产物

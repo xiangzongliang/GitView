@@ -71,6 +71,14 @@ async function installUpdate() {
 	errorMsg.value = "";
 	try {
 		await UpdateService.DownloadAndInstall();
+		// Windows 自解包流程不会触发 updater 的 ready 事件，成功返回后
+		// 直接切到「重启并更新」状态，避免界面一直停在「下载中…」。
+		if (!ready.value) {
+			downloading.value = false;
+			progress.value = 100;
+			ready.value = true;
+			ui.success("新版本已就绪", "重启应用后生效");
+		}
 	} catch (e) {
 		downloading.value = false;
 		errorMsg.value = errMsg(e);

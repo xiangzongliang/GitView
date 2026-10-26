@@ -12,6 +12,10 @@ import (
 var assets embed.FS
 
 func main() {
+	// 启动即记一条日志：升级后「点击图标没反应」时，可用它确认 exe 是否
+	// 真的跑起来了（有新增行=程序已启动，无=exe 本身无法执行/被拦截）。
+	logUpdate("应用启动：version=%s", appVersion)
+
 	updateService := NewUpdateService()
 	// RepoService 同时供 AI 服务读取 config.json 中的模型配置。
 	repoService := &RepoService{}
