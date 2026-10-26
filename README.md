@@ -241,9 +241,44 @@ ditto -c -k --norsrc --noextattr --keepParent "bin/Git View.app" "bin/GitView_0.
 wails3 task package:dmg
 ```
 
-### 4.5 zip 打包要点
+### 4.5 Windows 打包与发布（NSIS 安装包 → 升级包）
 
-发布更新时，上传到更新服务器的 zip **顶层必须有且只有一个 `.app` 条目**，且文件名需能被自更新过滤关键字 `gitview` 识别（见 4.7）。
+首次分发与后续升级都使用 NSIS 安装包：应用内置 updater 在 Windows 上靠
+静默安装（/S）覆盖升级，绿色版裸 exe 无法走该流程。在 Windows 机器上执行：
+
+```powershell
+# 0. 前置：安装 NSIS（makensis 需在 PATH 中）
+# 1. 构建生产 exe（自动完成：前端构建 + Go 编译，-H windowsgui 隐藏控制台）
+wails3 task build
+
+# 2. 打包 NSIS 安装包（含构建；自动生成 WebView2 bootstrapper）
+wails3 task package
+# 用户级安装（免管理员权限）：wails3 task package INSTALL_SCOPE=user
+# MSIX 格式：wails3 task package FORMAT=msix
+
+# 3.（可选）打 zip，命名规则：GitView_<版本>_windows_amd64[_installer].zip
+Compress-Archive -Path "bin\GitView.exe" `
+	-DestinationPath "bin\GitView_0.1.11_windows_amd64.zip" -Force
+Compress-Archive -Path "build\windows\nsis\Git View-installer.exe" `
+	-DestinationPath "bin\GitView_0.1.11_windows_amd64_installer.zip" -Force
+```
+
+产物位置：
+
+| 命令                   | 产物                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `wails3 task build`    | `bin/GitView.exe`（绿色版，单文件可运行）                                                   |
+| `wails3 task package`  | `build/windows/nsis/Git View-installer.exe`（**首次安装与升级均用它，上传该文件到更新源**） |
+| `Compress-Archive ...` | `bin/GitView_<版本>_windows_amd64[_installer].zip`                                          |
+
+发布新版本前先同步版本号（`appservice.go` 的 `appVersion` 与 `build/config.yml`
+的 `info.version`，见 4.8）。老用户在「设置 → 关于」检查更新后，由内置 updater
+下载新安装包静默安装并重启，完成自动升级；首次发 Windows 升级包时建议实际
+走一遍「检查更新 → 升级 → 重启」验证静默安装闭环。
+
+### 4.6 macOS zip 打包要点
+
+发布更新时，上传到更新服务器的 zip **顶层必须有且只有一个 `.app` 条目**，且文件名需能被自更新过滤关键字 `gitview` 识别（见 4.8）。
 
 **必须用 `ditto`，且必须加 `--norsrc --noextattr`：**
 
@@ -258,7 +293,7 @@ wails3 task package:dmg
 unzip -l "bin/GitView_0.1.11_darwin_arm64.zip" | head
 ```
 
-### 4.6 各平台打包产物
+### 4.7 各平台打包产物
 
 | 平台           | 任务                                    | 产物                                                               |
 | -------------- | --------------------------------------- | ------------------------------------------------------------------ |
@@ -271,7 +306,7 @@ unzip -l "bin/GitView_0.1.11_darwin_arm64.zip" | head
 | 任意（服务器） | `build:server` / `build:docker`         | 无 GUI 的纯 HTTP 服务器二进制 / Docker 镜像（distroless 基础镜像） |
 | 交叉编译       | `setup:docker` 后 `GOOS=... build`      | 通过 `wails-cross` Docker 镜像交叉编译（约 800MB 下载）            |
 
-### 4.7 版本注入与自更新产物
+### 4.8 版本注入与自更新产物
 
 - 发布构建可注入真实版本号，需与更新清单中的版本（**不带 `v` 前缀**）完全一致：
 

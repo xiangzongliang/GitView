@@ -194,6 +194,7 @@ func gitShowBlob(repo, ref, rel string) ([]byte, error) {
 	defer markGitCmdDone()
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
+	hideConsoleWindow(cmd)
 	cmd.Dir = repo
 	// GIT_OPTIONAL_LOCKS=0：只读命令不要顺手刷新 index（见 gitexec.go 的说明）
 	cmd.Env = append(gitEnv(), "GIT_OPTIONAL_LOCKS=0")

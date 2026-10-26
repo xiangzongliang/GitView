@@ -1561,6 +1561,7 @@ func (s *GitService) RunCommand(repoPath string, cwd string, command string) (*C
 	// so subsequent commands can continue from there.
 	name, args := buildShellInvocation(command)
 	cmd := exec.CommandContext(ctx, name, args...)
+	hideConsoleWindow(cmd)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"LC_ALL=en_US.UTF-8",

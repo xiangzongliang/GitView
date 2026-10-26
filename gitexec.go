@@ -178,6 +178,7 @@ func runGitCtxEnv(ctx context.Context, repoPath string, extraEnv []string, args 
 	defer markGitCmdDone()
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
+	hideConsoleWindow(cmd)
 	if repoPath != "" {
 		cmd.Dir = repoPath
 	}
@@ -238,6 +239,7 @@ func runGitNetworkStream(repoPath string, onChunk func(string), args ...string) 
 	defer markGitCmdDone()
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
+	hideConsoleWindow(cmd)
 	if repoPath != "" {
 		cmd.Dir = repoPath
 	}
@@ -274,6 +276,7 @@ func runGitStep(repoPath string, network bool, args ...string) *GitStepResult {
 	defer markGitCmdDone()
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
+	hideConsoleWindow(cmd)
 	if repoPath != "" {
 		cmd.Dir = repoPath
 	}
