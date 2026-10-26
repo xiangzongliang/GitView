@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"runtime"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -35,7 +36,7 @@ func main() {
 		},
 	})
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+		winOpts := application.WebviewWindowOptions{
 		Title:  "Git View",
 		Width:  1400,
 		Height: 920,
@@ -50,7 +51,13 @@ func main() {
 		BackgroundType: application.BackgroundTypeTranslucent,
 		Windows:        application.WindowsWindow{},
 		URL:            "/",
-	})
+	}
+	// Windows：无边框窗口，去掉系统标题栏，由前端自绘最小化/最大化/关闭
+	//（见 frontend TitleBar.vue）；macOS 保持 HiddenInset 原生样式。
+	if runtime.GOOS == "windows" {
+		winOpts.Frameless = true
+	}
+	app.Window.NewWithOptions(winOpts)
 
 	// 初始化自更新能力（app 创建后 app.Updater 才可用）。
 	// 失败只记录日志，不阻塞启动，也不影响应用使用。
