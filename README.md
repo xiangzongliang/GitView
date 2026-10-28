@@ -1,8 +1,82 @@
-# Git View
+<p align="center">
+  <img src="./docs/images/logo.png" alt="Git View" width="128" height="128" />
+</p>
+
+<h1 align="center">Git View</h1>
+
+<p align="center">
+  基于 <b>Wails v3</b> 的现代化 Git 桌面客户端<br />
+  Go 后端 · Vue 3 前端 · 单窗口多仓库 · 事件驱动刷新
+</p>
+
+<p align="center">
+  <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-2f81f7" />
+  <img alt="go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
+  <img alt="vue" src="https://img.shields.io/badge/Vue-3-42B883?logo=vuedotjs&logoColor=white" />
+  <img alt="wails" src="https://img.shields.io/badge/Wails-v3-EA5D50" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.1.17-1f6feb" />
+</p>
+
+Git View 是一个基于 **[Wails v3](https://v3.wails.io)** 构建的现代化 Git 桌面客户端：Go 负责 Git 操作与仓库监听，[Vue 3](https://cn.vuejs.org) 负责界面渲染，二者通过 Wails 自动生成的绑定直接调用。它面向本地工作流的日常使用——多仓库管理、提交历史浏览、文件暂存/提交、分支与标签、合并/变基/拣选、暂存区（stash）、远端操作、内置终端，以及应用自更新。
+
+该项目完全由 AI 生成，使用大模型：deepseek-v4-pro、deepseek-flash、qwen3.8-max、glm-5.3、glm-5.3-flash。
+
+LOGO 由哩布哩布 AI 生成：[https://www.liblib.art/imageinfo/3ae8dbed38124dfeb783d934ef0d8eca](https://www.liblib.art/imageinfo/3ae8dbed38124dfeb783d934ef0d8eca)
+
+![GitView](./docs/images/gitView001.png)
 
 > **本项目（Git View）的代码与文档全部由 AI 编写。** 从架构设计、Go 后端、Vue 前端到构建脚本，均由 AI 生成，人工仅做需求描述与验收。
 
-Git View 是一个基于 **Wails v3** 构建的现代化 Git 桌面客户端：Go 负责 Git 操作与仓库监听，Vue 3 负责界面渲染，二者通过 Wails 自动生成的绑定直接调用。它面向本地工作流的日常使用——多仓库管理、提交历史浏览、文件暂存/提交、分支与标签、合并/变基/拣选、暂存区（stash）、远端操作、内置终端，以及应用自更新。
+---
+
+## 下载与安装
+
+前往 [Releases](https://github.com/xiangzongliang/GitView/releases) 下载对应平台的安装包：
+
+| 平台                | 文件                                         | 说明                                                   |
+| ------------------- | -------------------------------------------- | ------------------------------------------------------ |
+| macOS（Apple 芯片） | `GitView_<版本>_darwin_arm64.zip`            | 解压后将 `Git View.app` 拖入「应用程序」               |
+| Windows（x64）      | `GitView_<版本>_windows_amd64_installer.zip` | 解压后运行 `gitView-amd64-installer.exe`，支持静默升级 |
+
+![GitView](./docs/images/gitView002.png)
+支持配置大模型
+![GitView](./docs/images/gitView003.png)
+自动总结 commit 内容
+
+### 环境要求
+
+- **Git**：应用直接调用系统 `git` 命令，需已安装并在 `PATH` 中（macOS 可执行 `xcode-select --install`，Windows 使用 [Git for Windows](https://git-scm.com/download/win)）。
+- macOS 需要 Apple 芯片（arm64）版本。
+- Windows 需要 Win10 及以上，并具备 WebView2 运行时（Win11 自带；Win10 由安装包自动引导安装）。
+
+### macOS 首次打开
+
+当前发布包为 **ad-hoc 签名、未经 Apple 公证**，首次打开可能提示「无法验证开发者」或「已损坏」。任选一种方式：
+
+- Finder 中右键点 `Git View.app` → 选择「打开」→ 再次确认；或
+- 终端执行：
+
+    ```bash
+    xattr -dr com.apple.quarantine "/Applications/Git View.app"
+    ```
+
+### 自动更新
+
+macOS 侧下载新版本 zip 后由内置 updater 替换，Windows 侧下载新的 NSIS 安装包静默安装并重启，均无需手动卸载旧版。
+
+### 从源码构建
+
+见 [四、打包方式](#四打包方式)。
+
+---
+
+## 目录
+
+- [一、简介](#一简介)
+- [二、架构](#二架构)
+- [三、技术规范](#三技术规范)
+- [四、打包方式](#四打包方式)
+- [五、相关文档](#五相关文档)
 
 ---
 
