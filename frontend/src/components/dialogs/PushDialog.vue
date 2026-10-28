@@ -68,18 +68,19 @@ async function submit() {
 					/>
 				</label>
 			</div>
-			<label class="check">
-				<Checkbox v-model="setUpstream" />
-				设置上游跟踪（-u）
-			</label>
-			<label class="check">
-				<Checkbox v-model="pushTags" />
-				同时推送所有标签（--tags）
-			</label>
-			<label class="check danger-check">
-				<Checkbox v-model="force" />
-				强制推送（--force，会覆盖远程历史！）
-			</label>
+			<div class="check">
+				<Checkbox v-model="setUpstream">设置上游跟踪（-u）</Checkbox>
+			</div>
+			<div class="check">
+				<Checkbox v-model="pushTags"
+					>同时推送所有标签（--tags）</Checkbox
+				>
+			</div>
+			<div class="check danger-check">
+				<Checkbox v-model="force"
+					>强制推送（--force，会覆盖远程历史！）</Checkbox
+				>
+			</div>
 		</template>
 		<template #footer>
 			<button class="btn" @click="emit('close')">取消</button>
@@ -114,13 +115,8 @@ input[type="text"] {
 	width: 100%;
 }
 .check {
-	display: flex;
-	align-items: center;
-	gap: 7px;
 	font-size: 12.5px;
 	color: var(--text);
-	cursor: pointer;
-	user-select: none;
 }
 .danger-check {
 	color: var(--diff-del-text);

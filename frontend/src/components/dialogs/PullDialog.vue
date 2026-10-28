@@ -81,14 +81,16 @@ async function submit() {
 					/>
 				</label>
 			</div>
-			<label class="check">
-				<Checkbox v-model="rebase" />
-				使用 rebase 代替 merge（--rebase）
-			</label>
-			<label class="check">
-				<Checkbox v-model="autostash" />
-				自动 Stash / 恢复本地更改（--autostash）
-			</label>
+			<div class="check">
+				<Checkbox v-model="rebase"
+					>使用 rebase 代替 merge（--rebase）</Checkbox
+				>
+			</div>
+			<div class="check">
+				<Checkbox v-model="autostash"
+					>自动 Stash / 恢复本地更改（--autostash）</Checkbox
+				>
+			</div>
 		</template>
 		<template #footer>
 			<button class="btn" @click="emit('close')">取消</button>
@@ -123,13 +125,8 @@ input[type="text"] {
 	width: 100%;
 }
 .check {
-	display: flex;
-	align-items: center;
-	gap: 7px;
 	font-size: 12.5px;
 	color: var(--text);
-	cursor: pointer;
-	user-select: none;
 }
 .warn {
 	display: flex;

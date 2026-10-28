@@ -43,12 +43,7 @@ function onClick() {
 <template>
 	<!-- 根元素用 span：可安全嵌在外层 label 内（避免 label 嵌套）；
 	     原生 label 的转发点击仍会落到 input 上，因此点击文字也能切换。 -->
-	<span
-		class="cb"
-		:class="{ disabled }"
-		:title="title"
-		@click.prevent="onClick"
-	>
+	<span class="cb" :class="{ disabled }" :title="title" @click.stop="onClick">
 		<input
 			class="cb-input"
 			type="checkbox"
@@ -56,7 +51,7 @@ function onClick() {
 			:checked="value"
 			:indeterminate.prop="!!indeterminate"
 			:disabled="disabled"
-			@click.stop.prevent="onClick"
+			@click.stop="onClick"
 			@dblclick.stop
 		/>
 		<span v-if="label || $slots.default" class="cb-text">
