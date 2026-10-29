@@ -166,7 +166,9 @@ onBeforeUnmount(() => {
 				<img class="about-icon" src="/appicon.png" alt="Git View" />
 				<div class="about-hero-info">
 					<h3 class="about-name">Git View</h3>
-					<p class="about-line">一个现代化、简洁高效的 Git 桌面客户端</p>
+					<p class="about-line">
+						一个现代化、简洁高效的 Git 桌面客户端
+					</p>
 				</div>
 			</div>
 			<dl class="about-meta">
@@ -196,8 +198,7 @@ onBeforeUnmount(() => {
 					:disabled="checking || downloading"
 					@click="checkUpdates(false)"
 				>
-					<span v-if="checking" class="spinner" />
-					<Icon v-else name="refresh" :size="13" />
+					<Icon name="refresh" :size="13" :spin="checking" />
 					{{ checking ? "检查中…" : "检查更新" }}
 				</button>
 			</div>
@@ -224,11 +225,7 @@ onBeforeUnmount(() => {
 			<!-- 有新版本 -->
 			<div v-if="updateInfo?.updateAvailable" class="update-card">
 				<div class="update-card-head">
-					<Icon
-						name="download"
-						:size="16"
-						class="update-card-icon"
-					/>
+					<Icon name="download" :size="16" class="update-card-icon" />
 					<div class="update-card-info">
 						<div class="update-version">
 							v{{ updateInfo.latestVersion }}
@@ -236,10 +233,7 @@ onBeforeUnmount(() => {
 								>· {{ updateInfo.name }}</span
 							>
 						</div>
-						<div
-							v-if="updateInfo.publishedAt"
-							class="update-time"
-						>
+						<div v-if="updateInfo.publishedAt" class="update-time">
 							{{ formatPublishedAt(updateInfo.publishedAt) }}
 						</div>
 						<p v-if="updateInfo.notes" class="update-notes">
@@ -267,8 +261,7 @@ onBeforeUnmount(() => {
 						:disabled="downloading || checking"
 						@click="installUpdate"
 					>
-						<span v-if="downloading" class="spinner" />
-						<Icon v-else name="download" :size="13" />
+						<Icon name="download" :size="13" :spin="downloading" />
 						{{ downloading ? "下载中…" : "下载并安装" }}
 					</button>
 					<button v-else class="btn btn-primary" @click="restartApp">
@@ -364,15 +357,6 @@ onBeforeUnmount(() => {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--text-strong);
-}
-
-.spinner {
-	width: 13px;
-	height: 13px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 
 /* 软件更新 */

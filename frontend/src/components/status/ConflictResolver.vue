@@ -1154,8 +1154,7 @@ const sideMissingText = computed(() => {
 					title="把当前内容写入工作区文件"
 					@click="save(false)"
 				>
-					<Spinner v-if="saving" :size="12" />
-					<Icon v-else name="check" :size="12" />
+					<Icon name="check" :size="12" :spin="saving" />
 					保存
 				</button>
 				<button
@@ -1164,7 +1163,7 @@ const sideMissingText = computed(() => {
 					title="写入文件并暂存，标记冲突已解决"
 					@click="save(true)"
 				>
-					<Icon name="check" :size="12" />
+					<Icon name="check" :size="12" :spin="saving" />
 					已解决，暂存
 				</button>
 			</div>

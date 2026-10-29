@@ -51,9 +51,10 @@ import {
 	X,
 } from "@lucide/vue";
 
-const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
-	size: 14,
-});
+const props = withDefaults(
+	defineProps<{ name: string; size?: number; spin?: boolean }>(),
+	{ size: 14, spin: false },
+);
 
 const map: Record<string, Component> = {
 	bug: Bug,
@@ -109,5 +110,12 @@ const icon = computed<Component>(() => map[props.name] || Info);
 </script>
 
 <template>
-	<component :is="icon" :size="size" :stroke-width="1.9" aria-hidden="true" />
+	<!-- spin：loading 状态下让图标本身旋转（.spin 为 public/style.css 中的全局动画类） -->
+	<component
+		:is="icon"
+		:size="size"
+		:stroke-width="1.9"
+		:class="{ spin: props.spin }"
+		aria-hidden="true"
+	/>
 </template>

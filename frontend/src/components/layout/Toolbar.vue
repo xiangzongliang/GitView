@@ -4,7 +4,6 @@ import { useRepo } from "../../stores/repo";
 import { useRepos } from "../../stores/repos";
 import { useUI } from "../../stores/ui";
 import Icon from "../ui/Icon.vue";
-import Spinner from "../ui/Spinner.vue";
 import Tooltip from "../ui/Tooltip.vue";
 import SelectMenu from "../ui/SelectMenu.vue";
 import type { SelectEntry } from "../ui/types";
@@ -112,8 +111,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="repo.fetch('', true)"
 			>
-				<Spinner v-if="ui.isOp('fetch')" :size="13" />
-				<Icon v-else name="fetch" :size="15" />
+				<Icon name="fetch" :size="15" :spin="ui.isOp('fetch')" />
 			</button>
 		</Tooltip>
 		<Tooltip :text="behind ? `Pull：落后上游 ${behind} 个提交` : 'Pull'">
@@ -122,8 +120,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('pull')"
 			>
-				<Spinner v-if="ui.isOp('pull')" :size="13" />
-				<Icon v-else name="pull" :size="15" />
+				<Icon name="pull" :size="15" :spin="ui.isOp('pull')" />
 				<span
 					v-if="behind && !ui.isOp('pull')"
 					class="tool-count pull"
@@ -137,8 +134,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('push')"
 			>
-				<Spinner v-if="ui.isOp('push')" :size="13" />
-				<Icon v-else name="push" :size="15" />
+				<Icon name="push" :size="15" :spin="ui.isOp('push')" />
 				<span
 					v-if="ahead && !ui.isOp('push')"
 					class="tool-count push"
@@ -155,8 +151,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('branch')"
 			>
-				<Spinner v-if="ui.isOp('branch')" :size="13" />
-				<Icon v-else name="branch" :size="15" />
+				<Icon name="branch" :size="15" :spin="ui.isOp('branch')" />
 			</button>
 		</Tooltip>
 		<Tooltip text="合并">
@@ -165,11 +160,11 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('merge')"
 			>
-				<Spinner
-					v-if="ui.isOp('merge') || ui.isOp('rebase')"
-					:size="13"
+				<Icon
+					name="merge"
+					:size="15"
+					:spin="ui.isOp('merge') || ui.isOp('rebase')"
 				/>
-				<Icon v-else name="merge" :size="15" />
 			</button>
 		</Tooltip>
 		<Tooltip text="Stash 当前更改">
@@ -178,8 +173,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('stash')"
 			>
-				<Spinner v-if="ui.isOp('stash')" :size="13" />
-				<Icon v-else name="stash" :size="15" />
+				<Icon name="stash" :size="15" :spin="ui.isOp('stash')" />
 			</button>
 		</Tooltip>
 
@@ -233,7 +227,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="repo.refreshAll()"
 			>
-				<Icon name="refresh" :size="15" :class="{ spin: busy }" />
+				<Icon name="refresh" :size="15" :spin="busy" />
 			</button>
 		</Tooltip>
 	</div>

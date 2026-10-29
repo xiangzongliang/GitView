@@ -26,7 +26,6 @@ import ImageDiffViewer from "../common/ImageDiffViewer.vue";
 import ConflictResolver from "./ConflictResolver.vue";
 import { basename, dirname, isImageFile } from "../../utils/format";
 import Icon from "../ui/Icon.vue";
-import Spinner from "../ui/Spinner.vue";
 import Checkbox from "../ui/Checkbox.vue";
 import SelectMenu from "../ui/SelectMenu.vue";
 import type { SelectEntry } from "../ui/types";
@@ -391,8 +390,7 @@ watch(
 							:title="aiButtonHint"
 							@click="aiComplete"
 						>
-							<Spinner v-if="aiBusy" :size="12" />
-							<Icon v-else name="sparkles" :size="12" />
+							<Icon name="sparkles" :size="12" :spin="aiBusy" />
 							AI 补充
 						</button>
 					</div>
@@ -413,8 +411,7 @@ watch(
 						title="没有待提交的更改，把本地提交推送到远程"
 						@click="ui.openDialog('push')"
 					>
-						<Spinner v-if="ui.isOp('push')" :size="13" />
-						<Icon v-else name="push" :size="13" />
+						<Icon name="push" :size="13" :spin="ui.isOp('push')" />
 						{{ ui.isOp("push") ? "推送中…" : "Push" }}
 						<span
 							v-if="ahead && !ui.isOp('push')"
@@ -428,8 +425,11 @@ watch(
 						:disabled="!canCommit"
 						@click="repo.doCommit()"
 					>
-						<Spinner v-if="ui.isOp('commit')" :size="13" />
-						<Icon v-else name="commit" :size="13" />
+						<Icon
+							name="commit"
+							:size="13"
+							:spin="ui.isOp('commit')"
+						/>
 						{{
 							ui.isOp("commit")
 								? "提交中…"

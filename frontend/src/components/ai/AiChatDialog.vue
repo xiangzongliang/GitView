@@ -152,7 +152,9 @@ function jumpToEnd() {
 	stick.value = true;
 	const el = scroller.value;
 	if (!el) return;
-	for (const body of Array.from(el.querySelectorAll<HTMLElement>(".step-body"))) {
+	for (const body of Array.from(
+		el.querySelectorAll<HTMLElement>(".step-body"),
+	)) {
 		body.dataset.stick = "1";
 		body.scrollTop = body.scrollHeight;
 	}
@@ -319,12 +321,18 @@ onBeforeUnmount(() => {
 					<div v-if="s.kind === 'thinking'" class="step thinking">
 						<button class="step-head" @click="s.open = !s.open">
 							<Icon
-								:name="s.open ? 'chevron-down' : 'chevron-right'"
+								:name="
+									s.open ? 'chevron-down' : 'chevron-right'
+								"
 								:size="12"
 								class="step-arrow"
 							/>
-							<Spinner v-if="!s.done" :size="11" />
-							<Icon v-else name="sparkles" :size="11" class="step-icon" />
+							<Icon
+								name="sparkles"
+								:size="11"
+								class="step-icon"
+								:spin="!s.done"
+							/>
 							<span class="step-title">思考过程</span>
 							<span v-if="!s.open" class="step-preview">{{
 								preview(s.text)
@@ -334,15 +342,16 @@ onBeforeUnmount(() => {
 							v-if="s.open"
 							class="step-body"
 							@scroll="onBodyScroll"
-							>{{ s.text }}</pre
-						>
+							>{{ s.text }}</pre>
 					</div>
 
 					<!-- 工具调用 -->
 					<div v-else-if="s.kind === 'tool'" class="step tool">
 						<button class="step-head" @click="s.open = !s.open">
 							<Icon
-								:name="s.open ? 'chevron-down' : 'chevron-right'"
+								:name="
+									s.open ? 'chevron-down' : 'chevron-right'
+								"
 								:size="12"
 								class="step-arrow"
 							/>
@@ -360,8 +369,7 @@ onBeforeUnmount(() => {
 							v-if="s.open"
 							class="step-body"
 							@scroll="onBodyScroll"
-							>{{ toolDetail(s) }}</pre
-						>
+							>{{ toolDetail(s) }}</pre>
 					</div>
 
 					<!-- 模型输出 -->

@@ -258,21 +258,21 @@ async function syncAndRefresh(B: string) {
 	await syncTargetBranch(B);
 	await Promise.all([refreshMergeCommits(), refreshDiff()]);
 }
-	void syncAndRefresh(target.value);
+void syncAndRefresh(target.value);
 
-	// 提交信息前缀：与文件状态页共享同一份项目配置。
-	const DEFAULT_COMMIT_PREFIX = "AI：";
-	const commitPrefix = ref(DEFAULT_COMMIT_PREFIX);
-	async function loadCommitPrefix() {
-		if (!repo.path) return;
-		try {
-			const saved = await RepoService.GetAiCommitPrefix(repo.path);
-			commitPrefix.value = saved == null ? DEFAULT_COMMIT_PREFIX : saved;
-		} catch {
-			/* ignore */
-		}
+// 提交信息前缀：与文件状态页共享同一份项目配置。
+const DEFAULT_COMMIT_PREFIX = "AI：";
+const commitPrefix = ref(DEFAULT_COMMIT_PREFIX);
+async function loadCommitPrefix() {
+	if (!repo.path) return;
+	try {
+		const saved = await RepoService.GetAiCommitPrefix(repo.path);
+		commitPrefix.value = saved == null ? DEFAULT_COMMIT_PREFIX : saved;
+	} catch {
+		/* ignore */
 	}
-	void loadCommitPrefix();
+}
+void loadCommitPrefix();
 
 // AI 模型选择：与提交信息生成一致，记住上次选择、失效时回退到第一个可用模型。
 const AI_MODEL_KEY = "gv.aiMergeModel";
@@ -300,13 +300,13 @@ watch(
 );
 const hasAiModel = computed(() => availableAiModels(ai.providers).length > 0);
 
-	const aiBusy = ref(false);
-	const aiError = ref("");
-	/** AI 归纳时的思考过程文本。 */
-	const aiReasoning = ref("");
-	/** 思考过程是否展开。 */
-	const showReasoning = ref(false);
-	let chat: ChatSession | null = null;
+const aiBusy = ref(false);
+const aiError = ref("");
+/** AI 归纳时的思考过程文本。 */
+const aiReasoning = ref("");
+/** 思考过程是否展开。 */
+const showReasoning = ref(false);
+let chat: ChatSession | null = null;
 
 /** 去掉模型偶尔多输出的围栏/引号，并压成单行。 */
 function cleanSummary(text: string): string {
@@ -376,7 +376,10 @@ async function aiGenerate() {
 					message.value += t;
 				},
 				onDone: (content) => {
-					message.value = applyCommitPrefix(cleanSummary(content), commitPrefix.value);
+					message.value = applyCommitPrefix(
+						cleanSummary(content),
+						commitPrefix.value,
+					);
 					aiBusy.value = false;
 					chat = null;
 				},
@@ -857,23 +860,28 @@ function attemptClose() {
 								: ui.openSettings('aimodels')
 						"
 					>
-						<Spinner v-if="aiBusy" :size="12" />
-						<Icon v-else name="sparkles" :size="12" />
+						<Icon name="sparkles" :size="12" :spin="aiBusy" />
 						{{ aiBusy ? "停止生成" : "AI 归纳生成" }}
 					</button>
 				</div>
 				<!-- AI 思考过程 -->
 				<div v-if="aiReasoning" class="reasoning-block">
-					<button class="reasoning-head" @click="showReasoning = !showReasoning">
+					<button
+						class="reasoning-head"
+						@click="showReasoning = !showReasoning"
+					>
 						<Icon
-							:name="showReasoning ? 'chevron-down' : 'chevron-right'"
+							:name="
+								showReasoning ? 'chevron-down' : 'chevron-right'
+							"
 							:size="11"
 						/>
-						<Spinner v-if="aiBusy" :size="10" />
-						<Icon v-else name="sparkles" :size="10" />
+						<Icon name="sparkles" :size="10" :spin="aiBusy" />
 						<span>思考过程</span>
 					</button>
-					<pre v-if="showReasoning" class="reasoning-body">{{ aiReasoning }}</pre>
+					<pre v-if="showReasoning" class="reasoning-body">{{
+						aiReasoning
+					}}</pre>
 				</div>
 				<div v-if="aiError" class="hint err">{{ aiError }}</div>
 			</div>

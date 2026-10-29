@@ -630,7 +630,7 @@ async function stashClearAll() {
 					title="Fetch 所有远程"
 					@click="repo.fetch('', true)"
 				>
-					<Icon name="fetch" :size="12" />
+					<Icon name="fetch" :size="12" :spin="ui.isOp('fetch')" />
 				</button>
 				<button
 					class="btn-icon sec-add"
