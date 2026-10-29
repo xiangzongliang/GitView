@@ -390,7 +390,10 @@ watch(
 							:title="aiButtonHint"
 							@click="aiComplete"
 						>
-							<Icon name="sparkles" :size="12" :spin="aiBusy" />
+							<Icon
+								:name="aiBusy ? 'loading' : 'sparkles'"
+								:size="12"
+							/>
 							AI 补充
 						</button>
 					</div>
@@ -411,7 +414,10 @@ watch(
 						title="没有待提交的更改，把本地提交推送到远程"
 						@click="ui.openDialog('push')"
 					>
-						<Icon name="push" :size="13" :spin="ui.isOp('push')" />
+						<Icon
+							:name="ui.isOp('push') ? 'loading' : 'push'"
+							:size="13"
+						/>
 						{{ ui.isOp("push") ? "推送中…" : "Push" }}
 						<span
 							v-if="ahead && !ui.isOp('push')"
@@ -426,9 +432,8 @@ watch(
 						@click="repo.doCommit()"
 					>
 						<Icon
-							name="commit"
+							:name="ui.isOp('commit') ? 'loading' : 'commit'"
 							:size="13"
-							:spin="ui.isOp('commit')"
 						/>
 						{{
 							ui.isOp("commit")

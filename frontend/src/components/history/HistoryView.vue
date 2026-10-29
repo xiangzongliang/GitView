@@ -5,6 +5,7 @@ import { ROW_H, layoutGraph, graphWidth } from "../../utils/graph";
 import CommitRow from "./CommitRow.vue";
 import CommitDetail from "./CommitDetail.vue";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
 
 const repo = useRepo();
 
@@ -219,7 +220,7 @@ const unborn = computed(
 				</div>
 
 				<div v-if="repo.logLoading" class="load-more">
-					<span class="spinner" />
+					<Spinner :size="13" />
 					加载提交…
 				</div>
 
@@ -399,13 +400,5 @@ const unborn = computed(
 	flex-direction: column;
 	border-top: 1px solid var(--border);
 	overflow: hidden;
-}
-.spinner {
-	width: 13px;
-	height: 13px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 </style>

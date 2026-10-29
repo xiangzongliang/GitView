@@ -1154,7 +1154,7 @@ const sideMissingText = computed(() => {
 					title="把当前内容写入工作区文件"
 					@click="save(false)"
 				>
-					<Icon name="check" :size="12" :spin="saving" />
+					<Icon :name="saving ? 'loading' : 'check'" :size="12" />
 					保存
 				</button>
 				<button
@@ -1163,14 +1163,14 @@ const sideMissingText = computed(() => {
 					title="写入文件并暂存，标记冲突已解决"
 					@click="save(true)"
 				>
-					<Icon name="check" :size="12" :spin="saving" />
+					<Icon :name="saving ? 'loading' : 'check'" :size="12" />
 					已解决，暂存
 				</button>
 			</div>
 		</div>
 
 		<div v-if="loading" class="empty-hint">
-			<span class="spinner" />
+			<Spinner :size="15" />
 			<span>加载冲突详情…</span>
 		</div>
 
@@ -1601,7 +1601,11 @@ const sideMissingText = computed(() => {
 					<div class="drawer-panels">
 						<!-- ==== 左侧：提交列表（始终可见） ==== -->
 						<div class="drawer-list">
-							<Spinner v-if="drawerLoading" :size="16" />
+							<Spinner
+								v-if="drawerLoading"
+								class="drawer-spinner"
+								:size="16"
+							/>
 							<div
 								v-else-if="drawerCommits.length === 0"
 								class="drawer-empty"
@@ -1640,7 +1644,11 @@ const sideMissingText = computed(() => {
 								</div>
 							</template>
 							<template v-else>
-								<Spinner v-if="drawerFilesLoading" :size="16" />
+								<Spinner
+									v-if="drawerFilesLoading"
+									class="drawer-spinner"
+									:size="16"
+								/>
 								<template v-else-if="drawerCommitInfo">
 									<!-- 提交元数据 -->
 									<div class="drawer-meta">
@@ -1941,19 +1949,6 @@ const sideMissingText = computed(() => {
 .bin-actions {
 	display: flex;
 	gap: 8px;
-}
-.spinner {
-	width: 15px;
-	height: 15px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-	to {
-		transform: rotate(360deg);
-	}
 }
 
 /* ------------------------------------------------------------------ 面板通用 */
@@ -2360,7 +2355,7 @@ const sideMissingText = computed(() => {
 	flex-direction: column;
 	align-items: center;
 }
-.drawer-list > .spinner {
+.drawer-list > .drawer-spinner {
 	margin-top: 24px;
 }
 .drawer-empty {
@@ -2377,7 +2372,7 @@ const sideMissingText = computed(() => {
 	display: flex;
 	flex-direction: column;
 }
-.drawer-detail > .spinner {
+.drawer-detail > .drawer-spinner {
 	margin-top: 24px;
 	align-self: center;
 }

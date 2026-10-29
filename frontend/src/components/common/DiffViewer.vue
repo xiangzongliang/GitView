@@ -4,6 +4,7 @@ import hljs from "highlight.js/lib/common";
 import { parseDiff, langFromPath } from "../../utils/diff";
 import type { DiffLine } from "../../utils/diff";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
 
 const props = withDefaults(
 	defineProps<{
@@ -111,7 +112,7 @@ const isEmpty = computed(() => {
 <template>
 	<div class="diff-viewer">
 		<div v-if="loading" class="empty-hint">
-			<span class="spinner" />
+			<Spinner :size="16" />
 			<span>加载差异…</span>
 		</div>
 		<div v-else-if="isEmpty" class="empty-hint">
@@ -289,13 +290,5 @@ const isEmpty = computed(() => {
 .diff-row.nonl {
 	color: var(--text-faint);
 	font-style: italic;
-}
-.spinner {
-	width: 16px;
-	height: 16px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 </style>

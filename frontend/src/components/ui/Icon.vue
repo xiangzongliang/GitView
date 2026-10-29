@@ -29,6 +29,7 @@ import {
 	GitGraph,
 	GitMerge,
 	Info,
+	LoaderCircle,
 	Maximize2,
 	Minimize2,
 	Minus,
@@ -51,10 +52,9 @@ import {
 	X,
 } from "@lucide/vue";
 
-const props = withDefaults(
-	defineProps<{ name: string; size?: number; spin?: boolean }>(),
-	{ size: 14, spin: false },
-);
+const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
+	size: 14,
+});
 
 const map: Record<string, Component> = {
 	bug: Bug,
@@ -96,6 +96,7 @@ const map: Record<string, Component> = {
 	external: ExternalLink,
 	terminal: Terminal,
 	info: Info,
+	loading: LoaderCircle,
 	eye: Eye,
 	"eye-off": EyeOff,
 	repo: FolderGit2,
@@ -110,12 +111,12 @@ const icon = computed<Component>(() => map[props.name] || Info);
 </script>
 
 <template>
-	<!-- spin：loading 状态下让图标本身旋转（.spin 为 public/style.css 中的全局动画类） -->
+	<!-- name="loading" 时始终旋转（全局 .spin 动画类见 public/style.css） -->
 	<component
 		:is="icon"
 		:size="size"
 		:stroke-width="1.9"
-		:class="{ spin: props.spin }"
+		:class="{ spin: props.name === 'loading' }"
 		aria-hidden="true"
 	/>
 </template>

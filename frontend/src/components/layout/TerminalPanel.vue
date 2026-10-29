@@ -8,6 +8,7 @@ import { useUI } from "../../stores/ui";
 import { GitService, errMsg } from "../../api";
 import { parseAnsi, type AnsiSeg } from "../../utils/ansi";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
 
 interface TermLine {
 	kind: "cmd" | "out" | "err" | "sys";
@@ -152,11 +153,7 @@ async function pathCandidates(token: string): Promise<string[]> {
 		? `Get-ChildItem -Force ${shellQuote(dir || ".")} | ForEach-Object { $_.Name + $(if ($_.PSIsContainer) { '/' } else { '' }) }`
 		: "ls -1AF " + shellQuote(dir || ".");
 	try {
-		const res = await GitService.RunCommand(
-			repo.path,
-			cwd.value,
-			listCmd,
-		);
+		const res = await GitService.RunCommand(repo.path, cwd.value, listCmd);
 		if (!res || res.exitCode !== 0) return [];
 		return (res.output || "")
 			.split("\n")
@@ -438,7 +435,7 @@ function resetHeight() {
 				:disabled="busy || !repo.path"
 				@keydown="onKey"
 			/>
-			<span v-if="busy" class="spinner" />
+			<Spinner v-if="busy" :size="12" />
 		</div>
 	</div>
 </template>
@@ -657,14 +654,5 @@ function resetHeight() {
 }
 .term-input::placeholder {
 	color: var(--text-faint);
-}
-.spinner {
-	flex: none;
-	width: 12px;
-	height: 12px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 </style>

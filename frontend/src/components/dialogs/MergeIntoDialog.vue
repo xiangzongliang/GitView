@@ -860,7 +860,10 @@ function attemptClose() {
 								: ui.openSettings('aimodels')
 						"
 					>
-						<Icon name="sparkles" :size="12" :spin="aiBusy" />
+						<Icon
+							:name="aiBusy ? 'loading' : 'sparkles'"
+							:size="12"
+						/>
 						{{ aiBusy ? "停止生成" : "AI 归纳生成" }}
 					</button>
 				</div>
@@ -876,7 +879,10 @@ function attemptClose() {
 							"
 							:size="11"
 						/>
-						<Icon name="sparkles" :size="10" :spin="aiBusy" />
+						<Icon
+							:name="aiBusy ? 'loading' : 'sparkles'"
+							:size="10"
+						/>
 						<span>思考过程</span>
 					</button>
 					<pre v-if="showReasoning" class="reasoning-body">{{

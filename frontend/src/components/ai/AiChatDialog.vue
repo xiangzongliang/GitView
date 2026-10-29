@@ -328,10 +328,9 @@ onBeforeUnmount(() => {
 								class="step-arrow"
 							/>
 							<Icon
-								name="sparkles"
+								:name="s.done ? 'sparkles' : 'loading'"
 								:size="11"
 								class="step-icon"
-								:spin="!s.done"
 							/>
 							<span class="step-title">思考过程</span>
 							<span v-if="!s.open" class="step-preview">{{

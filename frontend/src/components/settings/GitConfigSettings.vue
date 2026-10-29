@@ -4,6 +4,7 @@ import { onMounted, ref } from "vue";
 import { GitService, errMsg } from "../../api";
 import { useUI } from "../../stores/ui";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
 
 const ui = useUI();
 
@@ -64,7 +65,7 @@ onMounted(loadConfig);
 		<h3 class="group-title">全局 Git 配置</h3>
 		<p class="group-desc">对应 ~/.gitconfig，影响所有仓库。</p>
 		<div v-if="cfgLoading" class="cfg-loading">
-			<span class="spinner" /> 读取配置…
+			<Spinner :size="13" /> 读取配置…
 		</div>
 		<template v-else>
 			<label v-for="f in CONFIG_FIELDS" :key="f.key" class="cfg-field">
@@ -135,14 +136,5 @@ onMounted(loadConfig);
 	display: flex;
 	gap: 8px;
 	margin-top: 14px;
-}
-
-.spinner {
-	width: 13px;
-	height: 13px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 </style>

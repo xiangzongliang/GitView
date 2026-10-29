@@ -289,7 +289,7 @@ function fileMenu(e: MouseEvent, f: Row) {
 <template>
 	<div class="file-list">
 		<div v-if="!repo.status" class="empty-hint">
-			<span class="spinner" />
+			<Spinner :size="15" />
 			<span>加载状态…</span>
 		</div>
 		<template v-else-if="rows.length > 0">
@@ -489,13 +489,5 @@ function fileMenu(e: MouseEvent, f: Row) {
 .clean-sub {
 	font-size: 11.5px;
 	color: var(--text-faint);
-}
-.spinner {
-	width: 15px;
-	height: 15px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 </style>

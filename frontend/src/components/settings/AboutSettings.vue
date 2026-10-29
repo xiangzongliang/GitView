@@ -198,7 +198,7 @@ onBeforeUnmount(() => {
 					:disabled="checking || downloading"
 					@click="checkUpdates(false)"
 				>
-					<Icon name="refresh" :size="13" :spin="checking" />
+					<Icon :name="checking ? 'loading' : 'refresh'" :size="13" />
 					{{ checking ? "检查中…" : "检查更新" }}
 				</button>
 			</div>
@@ -261,7 +261,10 @@ onBeforeUnmount(() => {
 						:disabled="downloading || checking"
 						@click="installUpdate"
 					>
-						<Icon name="download" :size="13" :spin="downloading" />
+						<Icon
+							:name="downloading ? 'loading' : 'download'"
+							:size="13"
+						/>
 						{{ downloading ? "下载中…" : "下载并安装" }}
 					</button>
 					<button v-else class="btn btn-primary" @click="restartApp">

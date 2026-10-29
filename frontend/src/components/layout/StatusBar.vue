@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
 
 const repo = useRepo();
 const ui = useUI();
@@ -20,7 +21,7 @@ const st = computed(() => repo.status);
 		<div class="spacer" />
 
 		<span v-if="ui.opRunning" class="sb-op">
-			<span class="spinner" />
+			<Spinner :size="10" />
 			{{ ui.opRunning }}
 		</span>
 		<span
@@ -127,14 +128,6 @@ const st = computed(() => repo.status);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	flex: none;
-}
-.spinner {
-	width: 10px;
-	height: 10px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 .sb-debug {
 	display: inline-flex;

@@ -11,6 +11,7 @@ import {
 	isImageFile,
 } from "../../utils/format";
 import Icon from "../ui/Icon.vue";
+import Spinner from "../ui/Spinner.vue";
 import RefChips from "../common/RefChips.vue";
 import DiffViewer from "../common/DiffViewer.vue";
 import ImageDiffViewer from "../common/ImageDiffViewer.vue";
@@ -77,7 +78,7 @@ function statusTitle(ch: string): string {
 <template>
 	<div class="commit-detail">
 		<div v-if="repo.detailLoading && !c" class="empty-hint">
-			<span class="spinner" />
+			<Spinner :size="16" />
 			<span>加载提交详情…</span>
 		</div>
 		<div v-else-if="!c" class="empty-hint">
@@ -425,13 +426,5 @@ function statusTitle(ch: string): string {
 	color: var(--text-faint);
 	font-size: 11.5px;
 	text-align: center;
-}
-.spinner {
-	width: 16px;
-	height: 16px;
-	border: 2px solid var(--border-strong);
-	border-top-color: var(--accent);
-	border-radius: 50%;
-	animation: spin 0.8s linear infinite;
 }
 </style>

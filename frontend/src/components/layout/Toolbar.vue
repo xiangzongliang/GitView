@@ -111,7 +111,10 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="repo.fetch('', true)"
 			>
-				<Icon name="fetch" :size="15" :spin="ui.isOp('fetch')" />
+				<Icon
+					:name="ui.isOp('fetch') ? 'loading' : 'fetch'"
+					:size="15"
+				/>
 			</button>
 		</Tooltip>
 		<Tooltip :text="behind ? `Pull：落后上游 ${behind} 个提交` : 'Pull'">
@@ -120,7 +123,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('pull')"
 			>
-				<Icon name="pull" :size="15" :spin="ui.isOp('pull')" />
+				<Icon :name="ui.isOp('pull') ? 'loading' : 'pull'" :size="15" />
 				<span
 					v-if="behind && !ui.isOp('pull')"
 					class="tool-count pull"
@@ -134,7 +137,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('push')"
 			>
-				<Icon name="push" :size="15" :spin="ui.isOp('push')" />
+				<Icon :name="ui.isOp('push') ? 'loading' : 'push'" :size="15" />
 				<span
 					v-if="ahead && !ui.isOp('push')"
 					class="tool-count push"
@@ -151,7 +154,10 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('branch')"
 			>
-				<Icon name="branch" :size="15" :spin="ui.isOp('branch')" />
+				<Icon
+					:name="ui.isOp('branch') ? 'loading' : 'branch'"
+					:size="15"
+				/>
 			</button>
 		</Tooltip>
 		<Tooltip text="合并">
@@ -161,9 +167,12 @@ const refFilterIcon = computed(() => {
 				@click="ui.openDialog('merge')"
 			>
 				<Icon
-					name="merge"
+					:name="
+						ui.isOp('merge') || ui.isOp('rebase')
+							? 'loading'
+							: 'merge'
+					"
 					:size="15"
-					:spin="ui.isOp('merge') || ui.isOp('rebase')"
 				/>
 			</button>
 		</Tooltip>
@@ -173,7 +182,10 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="ui.openDialog('stash')"
 			>
-				<Icon name="stash" :size="15" :spin="ui.isOp('stash')" />
+				<Icon
+					:name="ui.isOp('stash') ? 'loading' : 'stash'"
+					:size="15"
+				/>
 			</button>
 		</Tooltip>
 
@@ -227,7 +239,7 @@ const refFilterIcon = computed(() => {
 				:disabled="!enabled || busy"
 				@click="repo.refreshAll()"
 			>
-				<Icon name="refresh" :size="15" :spin="busy" />
+				<Icon :name="busy ? 'loading' : 'refresh'" :size="15" />
 			</button>
 		</Tooltip>
 	</div>
